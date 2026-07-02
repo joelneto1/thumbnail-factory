@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+build
+data
+.git
+.gitignore
+*.md
+!AGENTS.md
+.env*
+*.zip
+.claude
+.vscode
+npm-debug.log*
+*.tsbuildinfo
+Dockerfile
+.dockerignore

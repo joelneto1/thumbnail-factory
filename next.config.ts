@@ -7,6 +7,10 @@ import type { NextConfig } from "next";
 const projectRoot = import.meta.dirname ?? process.cwd();
 
 const nextConfig: NextConfig = {
+  // Build standalone p/ Docker/Coolify: gera .next/standalone com server.js
+  // e só as deps necessárias (imagem menor). better-sqlite3 fica external
+  // (não é bundlado) e seu binário nativo é incluído no trace.
+  output: "standalone",
   turbopack: {
     root: projectRoot,
   },
