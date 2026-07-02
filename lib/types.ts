@@ -1,3 +1,5 @@
+// "gemini" permanece só como legado — gerações antigas no DB usaram essa engine.
+// Novas gerações não podem selecioná-la (ver engineSchema). Imagem hoje = "glabs".
 export type EngineId = "glabs" | "gemini" | "gpt-image-2";
 
 export type GenerationMode = "from-scratch" | "remodel";
@@ -106,7 +108,7 @@ export interface GenerationVariant {
 
 export interface HealthStatus {
   glabs: "up" | "down" | "unknown";
-  gemini: "configured" | "missing";
+  claude: "configured" | "missing";
   glabsBaseUrl: string;
   checkedAt: number;
 }

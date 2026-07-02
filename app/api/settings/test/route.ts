@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
 
 import { checkGlabsHealth } from "@/lib/engines/glabs";
-import { isGeminiConfigured } from "@/lib/engines/gemini";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getGeminiApiKey, getGlabsBaseUrl } from "@/lib/settings";
+import { callClaude, isClaudeConfigured } from "@/lib/engines/claude";
+import { getGlabsBaseUrl, getCliProxyBaseUrl, getCliProxyModel } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
-  const engine = body?.engine as "glabs" | "gemini" | undefined;
+  const engine = body?.engine as "glabs" | "claude" | undefined;
   if (!engine) {
     return NextResponse.json({ error: "Faltou 'engine'" }, { status: 400 });
   }
@@ -27,27 +26,28 @@ export async function POST(req: Request) {
     });
   }
 
-  if (engine === "gemini") {
-    if (!isGeminiConfigured()) {
+  if (engine === "claude") {
+    if (!isClaudeConfigured()) {
       return NextResponse.json({
         ok: false,
-        detail: "Chave Gemini não configurada",
+        detail: "Chave do CLI Proxy não configurada",
       });
     }
     try {
       const start = Date.now();
-      const client = new GoogleGenerativeAI(getGeminiApiKey()!);
-      const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
-      // Smallest possible call
-      const r = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: "ping" }] }],
-        generationConfig: { maxOutputTokens: 5 },
+      const text = await callClaude({
+        user: "Responda apenas com a palavra: pong",
+        reasoningEffort: "low",
+        maxTokens: 20,
+        maxRetries: 1,
+        timeoutMs: 30_000,
       });
       const latency = Date.now() - start;
-      const text = r.response.text();
       return NextResponse.json({
         ok: true,
-        detail: `Conectado (${latency}ms) — modelo respondeu "${text.trim().slice(0, 30)}"`,
+        detail: `Conectado (${latency}ms) — ${getCliProxyModel()} respondeu "${text
+          .trim()
+          .slice(0, 30)}" via ${getCliProxyBaseUrl()}`,
         latency,
       });
     } catch (err) {
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
         detail:
           err instanceof Error
             ? err.message
-            : "Erro desconhecido conectando ao Gemini",
+            : "Erro desconhecido conectando ao CLI Proxy",
       });
     }
   }

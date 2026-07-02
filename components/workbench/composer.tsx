@@ -152,14 +152,8 @@ export function Composer({
     {
       value: "glabs",
       label: "G-Labs · Nano Banana Pro",
-      meta: `${health?.glabs === "up" ? "online" : "offline"} · local · Chrome aberto`,
+      meta: `${health?.glabs === "up" ? "online" : "offline"} · Chrome/extensão ou túnel Tailscale`,
       avatar: <EngineMonogram id="glabs" />,
-    },
-    {
-      value: "gemini",
-      label: "Gemini · Flash Image",
-      meta: `${health?.gemini === "configured" ? "configurado" : "missing"} · ~$0.04/img`,
-      avatar: <EngineMonogram id="gemini" />,
     },
     {
       value: "gpt-image-2",
@@ -555,13 +549,11 @@ function EngineMonogram({ id }: { id: EngineId }) {
         background:
           id === "glabs"
             ? "var(--grad-cta)"
-            : id === "gemini"
-              ? "linear-gradient(135deg, #5CC8FF, #A78BFA)"
-              : "linear-gradient(135deg, #6B7280, #1F2937)",
+            : "linear-gradient(135deg, #6B7280, #1F2937)",
         fontSize: 11,
       }}
     >
-      {id === "glabs" ? "GL" : id === "gemini" ? "GM" : "G2"}
+      {id === "glabs" ? "GL" : "G2"}
     </span>
   );
 }

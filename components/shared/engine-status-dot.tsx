@@ -26,7 +26,7 @@ export function EngineStatusDot({
   engine,
   className,
 }: {
-  engine: "glabs" | "gemini";
+  engine: "glabs" | "claude";
   className?: string;
 }) {
   const { data } = useHealth();
@@ -41,11 +41,11 @@ export function EngineStatusDot({
           ? `G-Labs online (${data.glabsBaseUrl})`
           : `G-Labs offline em ${data.glabsBaseUrl}`;
     } else {
-      state = data.gemini === "configured" ? "ok" : "down";
+      state = data.claude === "configured" ? "ok" : "down";
       label =
-        data.gemini === "configured"
-          ? "Gemini API configurada"
-          : "GEMINI_API_KEY não definida";
+        data.claude === "configured"
+          ? "CLI Proxy (Claude) configurado"
+          : "CLI_PROXY_API_KEY não definida";
     }
   }
 

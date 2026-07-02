@@ -12,7 +12,10 @@ export async function GET() {
 const updateSchema = z.object({
   glabsBaseUrl: z.string().optional(),
   glabsApiKey: z.string().optional(),
-  geminiApiKey: z.string().optional(),
+  cliProxyBaseUrl: z.string().optional(),
+  cliProxyApiKey: z.string().optional(),
+  cliProxyModel: z.string().optional(),
+  cliProxyReasoningEffort: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -31,8 +34,20 @@ export async function POST(req: Request) {
   if (parsed.data.glabsApiKey !== undefined) {
     setSetting(SETTING_KEYS.GLABS_API_KEY, parsed.data.glabsApiKey.trim());
   }
-  if (parsed.data.geminiApiKey !== undefined) {
-    setSetting(SETTING_KEYS.GEMINI_API_KEY, parsed.data.geminiApiKey.trim());
+  if (parsed.data.cliProxyBaseUrl !== undefined) {
+    setSetting(SETTING_KEYS.CLI_PROXY_BASE_URL, parsed.data.cliProxyBaseUrl.trim());
+  }
+  if (parsed.data.cliProxyApiKey !== undefined) {
+    setSetting(SETTING_KEYS.CLI_PROXY_API_KEY, parsed.data.cliProxyApiKey.trim());
+  }
+  if (parsed.data.cliProxyModel !== undefined) {
+    setSetting(SETTING_KEYS.CLI_PROXY_MODEL, parsed.data.cliProxyModel.trim());
+  }
+  if (parsed.data.cliProxyReasoningEffort !== undefined) {
+    setSetting(
+      SETTING_KEYS.CLI_PROXY_REASONING_EFFORT,
+      parsed.data.cliProxyReasoningEffort.trim()
+    );
   }
 
   return NextResponse.json({ settings: getSettingsStatus() });

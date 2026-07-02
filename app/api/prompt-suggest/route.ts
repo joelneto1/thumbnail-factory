@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { suggestPrompt } from "@/lib/engines/gemini-text";
+import { suggestPrompt } from "@/lib/engines/claude-text";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;

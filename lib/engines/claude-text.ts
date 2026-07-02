@@ -1,12 +1,9 @@
 /**
- * Gemini text-only completions — usado pelo Prompt Assist do Workbench
- * pra expandir/gerar prompts ricos a partir de drafts curtos.
+ * Sugestão/enriquecimento de prompt via Claude Opus 4.8 (CLI Proxy).
+ * Usado pelo Prompt Assist do Workbench pra expandir/gerar prompts ricos a
+ * partir de drafts curtos. (Antes era Gemini Flash.)
  */
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getGeminiApiKey } from "../settings";
-import { GeminiError } from "./gemini";
-
-const TEXT_MODEL = "gemini-2.5-flash";
+import { callClaude, ClaudeError } from "./claude";
 
 export interface SuggestPromptParams {
   draft?: string | null;
@@ -15,7 +12,7 @@ export interface SuggestPromptParams {
 }
 
 const SYSTEM_INSTRUCTION = `Você é um diretor de arte especializado em thumbnails virais de YouTube.
-Reescreva ou expanda o draft do usuário pra virar um prompt rico, visual e direto pro modelo de imagem (Nano Banana Pro / Gemini Flash Image).
+Reescreva ou expanda o draft do usuário pra virar um prompt rico, visual e direto pro modelo de imagem que gera a thumbnail.
 
 Regras:
 - 2-5 frases. Conciso.
@@ -27,21 +24,6 @@ Regras:
 - Se o draft estiver vazio ou genérico, gere algo concreto: pessoa específica, ação clara, paleta vibrante, atmosfera.`;
 
 export async function suggestPrompt(params: SuggestPromptParams): Promise<string> {
-  const key = getGeminiApiKey();
-  if (!key) {
-    throw new GeminiError("GEMINI_API_KEY não configurada — Prompt Assist indisponível");
-  }
-
-  const client = new GoogleGenerativeAI(key);
-  const model = client.getGenerativeModel({
-    model: TEXT_MODEL,
-    systemInstruction: SYSTEM_INSTRUCTION,
-    generationConfig: {
-      temperature: 0.85,
-      maxOutputTokens: 400,
-    },
-  });
-
   const draft = (params.draft ?? "").trim();
   const personaContext = params.personaName
     ? `A persona principal é "${params.personaName}". Refira-se a ela como "the person in the attached face reference" pra que o modelo de imagem use a face certa.`
@@ -51,15 +33,19 @@ export async function suggestPrompt(params: SuggestPromptParams): Promise<string
     ? `${personaContext}\n\nDraft do usuário:\n"""\n${draft}\n"""\n\nDevolva o prompt final.`
     : `${personaContext}\n\nO usuário não escreveu nada. Sugira um prompt pronto-pra-usar de uma thumbnail viral genérica mas concreta.`;
 
-  const result = await model.generateContent({
-    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+  const text = await callClaude({
+    system: SYSTEM_INSTRUCTION,
+    user: userPrompt,
+    temperature: 0.85,
+    maxTokens: 400,
+    // Texto curto/criativo — reasoning baixo é mais rápido e suficiente.
+    reasoningEffort: "low",
   });
 
-  const text = result.response.text().trim();
   if (!text) {
-    throw new GeminiError("Gemini retornou resposta vazia");
+    throw new ClaudeError("Claude retornou resposta vazia");
   }
-  // Strip surrounding quotes/markdown that o modelo às vezes coloca.
+  // Strip surrounding quotes/markdown que o modelo às vezes coloca.
   return text
     .replace(/^["'`]+|["'`]+$/g, "")
     .replace(/^```[a-z]*\n?|\n?```$/gi, "")

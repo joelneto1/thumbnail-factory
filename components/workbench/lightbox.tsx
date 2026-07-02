@@ -23,6 +23,7 @@ export function Lightbox({
   onPrev?: () => void;
   onNext?: () => void;
   onDownload?: (v: GenerationVariant) => void;
+  onRegenerate?: (v: GenerationVariant) => void;
   onCopyPrompt?: () => void;
 }) {
   const v = index !== null ? variants[index] : null;

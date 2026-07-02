@@ -3,14 +3,7 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  Loader2,
-  Eye,
-  EyeOff,
-  CheckCircle2,
-  XCircle,
-  ExternalLink,
-} from "lucide-react";
+import { Loader2, Eye, EyeOff, CheckCircle2, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,13 +11,31 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
+type SourceInfo = {
+  value: string;
+  masked: string;
+  source: "db" | "env" | "default" | "missing";
+};
+
 interface SettingsStatus {
-  glabsBaseUrl: { value: string; masked: string; source: "db" | "env" | "default" | "missing" };
-  glabsApiKey: { value: string; masked: string; source: "db" | "env" | "default" | "missing" };
-  geminiApiKey: { value: string; masked: string; source: "db" | "env" | "default" | "missing" };
+  glabsBaseUrl: SourceInfo;
+  glabsApiKey: SourceInfo;
+  cliProxyBaseUrl: SourceInfo;
+  cliProxyApiKey: SourceInfo;
+  cliProxyModel: SourceInfo;
+  cliProxyReasoningEffort: SourceInfo;
 }
 
-function SourceBadge({ source }: { source: "db" | "env" | "default" | "missing" }) {
+interface SavePayload {
+  glabsBaseUrl?: string;
+  glabsApiKey?: string;
+  cliProxyBaseUrl?: string;
+  cliProxyApiKey?: string;
+  cliProxyModel?: string;
+  cliProxyReasoningEffort?: string;
+}
+
+function SourceBadge({ source }: { source: SourceInfo["source"] }) {
   if (source === "db") return <Badge variant="success">saved</Badge>;
   if (source === "env") return <Badge variant="secondary">.env.local</Badge>;
   if (source === "default") return <Badge variant="outline">default</Badge>;
@@ -45,22 +56,24 @@ export default function SettingsPage() {
 
   const [glabsBaseUrl, setGlabsBaseUrl] = React.useState("");
   const [glabsApiKey, setGlabsApiKey] = React.useState("");
-  const [geminiApiKey, setGeminiApiKey] = React.useState("");
+  const [cliProxyBaseUrl, setCliProxyBaseUrl] = React.useState("");
+  const [cliProxyApiKey, setCliProxyApiKey] = React.useState("");
+  const [cliProxyModel, setCliProxyModel] = React.useState("");
+  const [cliProxyReasoning, setCliProxyReasoning] = React.useState("");
   const [showGlabs, setShowGlabs] = React.useState(false);
-  const [showGemini, setShowGemini] = React.useState(false);
+  const [showCliProxy, setShowCliProxy] = React.useState(false);
 
   React.useEffect(() => {
     if (data?.settings) {
       setGlabsBaseUrl(data.settings.glabsBaseUrl.value || "");
+      setCliProxyBaseUrl(data.settings.cliProxyBaseUrl.value || "");
+      setCliProxyModel(data.settings.cliProxyModel.value || "");
+      setCliProxyReasoning(data.settings.cliProxyReasoningEffort.value || "");
     }
   }, [data?.settings]);
 
   const save = useMutation({
-    mutationFn: async (payload: {
-      glabsBaseUrl?: string;
-      glabsApiKey?: string;
-      geminiApiKey?: string;
-    }) => {
+    mutationFn: async (payload: SavePayload) => {
       const r = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -74,13 +87,13 @@ export default function SettingsPage() {
       qc.invalidateQueries({ queryKey: ["health"] });
       toast.success("Settings atualizadas");
       setGlabsApiKey("");
-      setGeminiApiKey("");
+      setCliProxyApiKey("");
     },
     onError: (e) => toast.error((e as Error).message),
   });
 
   const test = useMutation({
-    mutationFn: async (engine: "glabs" | "gemini") => {
+    mutationFn: async (engine: "glabs" | "claude") => {
       const r = await fetch("/api/settings/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -96,16 +109,23 @@ export default function SettingsPage() {
   });
 
   const handleSaveAll = () => {
-    const payload: {
-      glabsBaseUrl?: string;
-      glabsApiKey?: string;
-      geminiApiKey?: string;
-    } = {};
+    const payload: SavePayload = {};
     if (glabsBaseUrl !== (data?.settings.glabsBaseUrl.value ?? "")) {
       payload.glabsBaseUrl = glabsBaseUrl;
     }
     if (glabsApiKey) payload.glabsApiKey = glabsApiKey;
-    if (geminiApiKey) payload.geminiApiKey = geminiApiKey;
+    if (cliProxyBaseUrl !== (data?.settings.cliProxyBaseUrl.value ?? "")) {
+      payload.cliProxyBaseUrl = cliProxyBaseUrl;
+    }
+    if (cliProxyApiKey) payload.cliProxyApiKey = cliProxyApiKey;
+    if (cliProxyModel !== (data?.settings.cliProxyModel.value ?? "")) {
+      payload.cliProxyModel = cliProxyModel;
+    }
+    if (
+      cliProxyReasoning !== (data?.settings.cliProxyReasoningEffort.value ?? "")
+    ) {
+      payload.cliProxyReasoningEffort = cliProxyReasoning;
+    }
     if (Object.keys(payload).length === 0) {
       toast.message("Nada pra salvar");
       return;
@@ -147,7 +167,7 @@ export default function SettingsPage() {
                 <h2 className="display text-[24px] font-semibold tracking-[-0.02em]">
                   G-Labs{" "}
                   <span className="italic font-normal text-[var(--ink-3)]">
-                    — Nano Banana Pro
+                    — Nano Banana Pro (imagem)
                   </span>
                 </h2>
               </div>
@@ -165,10 +185,7 @@ export default function SettingsPage() {
                     style={{ color: "var(--success)" }}
                   />
                 ) : test.data?.engine === "glabs" && !test.data?.ok ? (
-                  <XCircle
-                    className="size-4"
-                    style={{ color: "var(--danger)" }}
-                  />
+                  <XCircle className="size-4" style={{ color: "var(--danger)" }} />
                 ) : null}
                 Test connection
               </Button>
@@ -248,7 +265,7 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* GEMINI */}
+          {/* CLI PROXY (CLAUDE) */}
           <section className="space-y-5">
             <div className="flex items-baseline justify-between border-b border-[var(--line)] pb-3">
               <div className="flex items-baseline gap-3">
@@ -256,87 +273,146 @@ export default function SettingsPage() {
                   02
                 </span>
                 <h2 className="display text-[24px] font-semibold tracking-[-0.02em]">
-                  Gemini{" "}
+                  CLI Proxy{" "}
                   <span className="italic font-normal text-[var(--ink-3)]">
-                    — fallback + análise OCR
+                    — Claude Opus 4.8 (prompt assist + análise OCR)
                   </span>
                 </h2>
               </div>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => test.mutate("gemini")}
-                disabled={test.isPending && test.variables === "gemini"}
+                onClick={() => test.mutate("claude")}
+                disabled={test.isPending && test.variables === "claude"}
               >
-                {test.isPending && test.variables === "gemini" ? (
+                {test.isPending && test.variables === "claude" ? (
                   <Loader2 className="size-4 animate-spin" />
-                ) : test.data?.engine === "gemini" && test.data?.ok ? (
+                ) : test.data?.engine === "claude" && test.data?.ok ? (
                   <CheckCircle2
                     className="size-4"
                     style={{ color: "var(--success)" }}
                   />
-                ) : test.data?.engine === "gemini" && !test.data?.ok ? (
-                  <XCircle
-                    className="size-4"
-                    style={{ color: "var(--danger)" }}
-                  />
+                ) : test.data?.engine === "claude" && !test.data?.ok ? (
+                  <XCircle className="size-4" style={{ color: "var(--danger)" }} />
                 ) : null}
                 Test connection
               </Button>
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label
-                  htmlFor="gemini-key"
-                  className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--ink-3)]"
-                >
-                  API Key
-                </Label>
-                <SourceBadge
-                  source={data?.settings.geminiApiKey.source ?? "missing"}
-                />
-              </div>
-              <div className="flex gap-2">
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label
+                    htmlFor="cli-url"
+                    className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--ink-3)]"
+                  >
+                    Base URL
+                  </Label>
+                  <SourceBadge
+                    source={data?.settings.cliProxyBaseUrl.source ?? "missing"}
+                  />
+                </div>
                 <Input
-                  id="gemini-key"
-                  type={showGemini ? "text" : "password"}
-                  value={geminiApiKey}
-                  onChange={(e) => setGeminiApiKey(e.target.value)}
-                  placeholder={
-                    data?.settings.geminiApiKey.masked
-                      ? `Atual: ${data.settings.geminiApiKey.masked}`
-                      : "Cole sua chave Gemini"
-                  }
+                  id="cli-url"
+                  value={cliProxyBaseUrl}
+                  onChange={(e) => setCliProxyBaseUrl(e.target.value)}
+                  placeholder="http://cli-proxyllm.rotaclubs.com/v1"
                   className="font-mono text-sm"
                 />
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => setShowGemini((v) => !v)}
-                >
-                  {showGemini ? (
-                    <EyeOff className="size-4" />
-                  ) : (
-                    <Eye className="size-4" />
-                  )}
-                </Button>
+                <p className="text-[11px] leading-relaxed text-[var(--ink-3)]">
+                  Endpoint compatível com OpenAI —{" "}
+                  <code className="text-[var(--ink-2)]">
+                    {"{base}"}/chat/completions
+                  </code>
+                  .
+                </p>
               </div>
-              <p className="flex items-center gap-1 text-[11px] leading-relaxed text-[var(--ink-3)]">
-                Pegue grátis em
-                <a
-                  href="https://aistudio.google.com/apikey"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-0.5 hover:underline"
-                  style={{ color: "var(--accent)" }}
-                >
-                  aistudio.google.com/apikey
-                  <ExternalLink className="size-3" />
-                </a>
-                — sem cartão.
-              </p>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label
+                    htmlFor="cli-key"
+                    className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--ink-3)]"
+                  >
+                    API Key
+                  </Label>
+                  <SourceBadge
+                    source={data?.settings.cliProxyApiKey.source ?? "missing"}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    id="cli-key"
+                    type={showCliProxy ? "text" : "password"}
+                    value={cliProxyApiKey}
+                    onChange={(e) => setCliProxyApiKey(e.target.value)}
+                    placeholder={
+                      data?.settings.cliProxyApiKey.masked
+                        ? `Atual: ${data.settings.cliProxyApiKey.masked}`
+                        : "Cole sua chave cpw_..."
+                    }
+                    className="font-mono text-sm"
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setShowCliProxy((v) => !v)}
+                  >
+                    {showCliProxy ? (
+                      <EyeOff className="size-4" />
+                    ) : (
+                      <Eye className="size-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label
+                      htmlFor="cli-model"
+                      className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--ink-3)]"
+                    >
+                      Modelo
+                    </Label>
+                    <SourceBadge
+                      source={data?.settings.cliProxyModel.source ?? "missing"}
+                    />
+                  </div>
+                  <Input
+                    id="cli-model"
+                    value={cliProxyModel}
+                    onChange={(e) => setCliProxyModel(e.target.value)}
+                    placeholder="claude-opus-4-8"
+                    className="font-mono text-sm"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label
+                      htmlFor="cli-reasoning"
+                      className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--ink-3)]"
+                    >
+                      Reasoning
+                    </Label>
+                    <SourceBadge
+                      source={
+                        data?.settings.cliProxyReasoningEffort.source ?? "missing"
+                      }
+                    />
+                  </div>
+                  <Input
+                    id="cli-reasoning"
+                    value={cliProxyReasoning}
+                    onChange={(e) => setCliProxyReasoning(e.target.value)}
+                    placeholder="none | low | medium | high"
+                    className="font-mono text-sm"
+                  />
+                </div>
+              </div>
             </div>
           </section>
 

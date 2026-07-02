@@ -111,12 +111,12 @@ export function TopNav() {
             <span
               className={cn(
                 "inline-block size-1.5 rounded-full",
-                health?.gemini === "configured"
+                health?.claude === "configured"
                   ? "bg-[var(--success)] pulse-dot"
                   : "bg-[var(--danger)]"
               )}
             />
-            Gemini
+            Claude
           </span>
         </div>
       </div>

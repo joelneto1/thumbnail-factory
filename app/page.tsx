@@ -151,7 +151,7 @@ function WorkbenchPageInner() {
     if (
       state.competitorPath &&
       state.competitorPath !== lastAnalyzedRef.current &&
-      health?.gemini === "configured"
+      health?.claude === "configured"
     ) {
       lastAnalyzedRef.current = state.competitorPath;
       analyze.mutate(state.competitorPath);
@@ -163,7 +163,7 @@ function WorkbenchPageInner() {
       setObjectSwaps([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.competitorPath, health?.gemini]);
+  }, [state.competitorPath, health?.claude]);
 
   // ─── Mode (controlado pelo tab do composer) ─────────────────────
   const [mode, setMode] = React.useState<"remodel" | "from-scratch">(
@@ -358,11 +358,9 @@ function WorkbenchPageInner() {
       return;
     }
     if (state.engine === "glabs" && health?.glabs === "down") {
-      toast.error("G-Labs offline — abre Chrome com extensão ou troca pra Gemini");
-      return;
-    }
-    if (state.engine === "gemini" && health?.gemini === "missing") {
-      toast.error("GEMINI_API_KEY faltando — vai em /settings");
+      toast.error(
+        "G-Labs offline — abre o Chrome com a extensão (ou configura o túnel Tailscale em /settings)"
+      );
       return;
     }
     generate.mutate();

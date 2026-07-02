@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { analyzeImage } from "@/lib/engines/gemini-analyze";
+import { analyzeImage } from "@/lib/engines/claude-analyze";
 import { resolveDataPath, readImageAsDataUrl } from "@/lib/files";
 
 export const dynamic = "force-dynamic";

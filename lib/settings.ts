@@ -7,10 +7,16 @@ import { settingsRepo } from "./db";
 export const SETTING_KEYS = {
   GLABS_BASE_URL: "glabs_base_url",
   GLABS_API_KEY: "glabs_api_key",
-  GEMINI_API_KEY: "gemini_api_key",
+  CLI_PROXY_BASE_URL: "cli_proxy_base_url",
+  CLI_PROXY_API_KEY: "cli_proxy_api_key",
+  CLI_PROXY_MODEL: "cli_proxy_model",
+  CLI_PROXY_REASONING_EFFORT: "cli_proxy_reasoning_effort",
 } as const;
 
 const DEFAULT_GLABS_BASE_URL = "http://127.0.0.1:8765";
+const DEFAULT_CLI_PROXY_BASE_URL = "http://cli-proxyllm.rotaclubs.com/v1";
+const DEFAULT_CLI_PROXY_MODEL = "claude-opus-4-8";
+const DEFAULT_CLI_PROXY_REASONING = "high";
 
 /**
  * Lê uma chave preferindo o que está no DB. Se vazio/nulo, cai pro env.
@@ -35,12 +41,37 @@ export function getGlabsApiKey(): string {
   return readSetting(SETTING_KEYS.GLABS_API_KEY, "GLABS_API_KEY") ?? "";
 }
 
-export function getGeminiApiKey(): string | null {
-  return readSetting(SETTING_KEYS.GEMINI_API_KEY, "GEMINI_API_KEY");
+// ─── CLI Proxy (Claude Opus 4.8, OpenAI-compatible) ───────────────────
+
+export function getCliProxyBaseUrl(): string {
+  return (
+    readSetting(SETTING_KEYS.CLI_PROXY_BASE_URL, "CLI_PROXY_BASE_URL") ??
+    DEFAULT_CLI_PROXY_BASE_URL
+  );
 }
 
-export function isGeminiConfigured(): boolean {
-  return !!getGeminiApiKey();
+export function getCliProxyApiKey(): string {
+  return readSetting(SETTING_KEYS.CLI_PROXY_API_KEY, "CLI_PROXY_API_KEY") ?? "";
+}
+
+export function getCliProxyModel(): string {
+  return (
+    readSetting(SETTING_KEYS.CLI_PROXY_MODEL, "CLI_PROXY_MODEL") ??
+    DEFAULT_CLI_PROXY_MODEL
+  );
+}
+
+export function getCliProxyReasoningEffort(): string {
+  return (
+    readSetting(
+      SETTING_KEYS.CLI_PROXY_REASONING_EFFORT,
+      "CLI_PROXY_REASONING_EFFORT"
+    ) ?? DEFAULT_CLI_PROXY_REASONING
+  );
+}
+
+export function isClaudeConfigured(): boolean {
+  return !!getCliProxyApiKey();
 }
 
 /**
@@ -49,9 +80,31 @@ export function isGeminiConfigured(): boolean {
  */
 export function getSettingsStatus() {
   return {
-    glabsBaseUrl: classifySource(SETTING_KEYS.GLABS_BASE_URL, "GLABS_BASE_URL", DEFAULT_GLABS_BASE_URL),
+    glabsBaseUrl: classifySource(
+      SETTING_KEYS.GLABS_BASE_URL,
+      "GLABS_BASE_URL",
+      DEFAULT_GLABS_BASE_URL
+    ),
     glabsApiKey: classifySource(SETTING_KEYS.GLABS_API_KEY, "GLABS_API_KEY"),
-    geminiApiKey: classifySource(SETTING_KEYS.GEMINI_API_KEY, "GEMINI_API_KEY"),
+    cliProxyBaseUrl: classifySource(
+      SETTING_KEYS.CLI_PROXY_BASE_URL,
+      "CLI_PROXY_BASE_URL",
+      DEFAULT_CLI_PROXY_BASE_URL
+    ),
+    cliProxyApiKey: classifySource(
+      SETTING_KEYS.CLI_PROXY_API_KEY,
+      "CLI_PROXY_API_KEY"
+    ),
+    cliProxyModel: classifySource(
+      SETTING_KEYS.CLI_PROXY_MODEL,
+      "CLI_PROXY_MODEL",
+      DEFAULT_CLI_PROXY_MODEL
+    ),
+    cliProxyReasoningEffort: classifySource(
+      SETTING_KEYS.CLI_PROXY_REASONING_EFFORT,
+      "CLI_PROXY_REASONING_EFFORT",
+      DEFAULT_CLI_PROXY_REASONING
+    ),
   };
 }
 

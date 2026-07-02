@@ -4,7 +4,7 @@ const items = [
   { num: "Nano Banana Pro", txt: "G-Labs · local, plano MAX" },
   { num: "16:9 · 1920×1080", txt: "thumbnail-grade output" },
   { num: "~3.4s", txt: "tempo médio por variante" },
-  { num: "Gemini Flash", txt: "OCR analysis · free tier" },
+  { num: "Claude Opus 4.8", txt: "análise OCR + prompt assist" },
   { num: "0 cliques", txt: "do prompt à geração" },
   { num: "1 face ref", txt: "controla 100% da identidade" },
 ];

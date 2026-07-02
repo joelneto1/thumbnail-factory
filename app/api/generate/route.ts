@@ -8,7 +8,6 @@ import {
   startGeneration,
   loadReferencesForGeneration,
 } from "@/lib/engines/orchestrator";
-import { isGeminiConfigured } from "@/lib/engines/gemini";
 
 export const dynamic = "force-dynamic";
 
@@ -45,13 +44,6 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-  }
-
-  if (data.engine === "gemini" && !isGeminiConfigured()) {
-    return NextResponse.json(
-      { error: "GEMINI_API_KEY não configurada" },
-      { status: 400 }
-    );
   }
 
   const competitorPath = data.competitorPath?.trim() ?? null;

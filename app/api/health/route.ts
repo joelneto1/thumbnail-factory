@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { checkGlabsHealth } from "@/lib/engines/glabs";
-import { isGeminiConfigured } from "@/lib/engines/gemini";
+import { isClaudeConfigured } from "@/lib/engines/claude";
 import { getGlabsBaseUrl } from "@/lib/settings";
 import type { HealthStatus } from "@/lib/types";
 
@@ -10,7 +10,7 @@ export async function GET() {
   const glabs = await checkGlabsHealth();
   const payload: HealthStatus = {
     glabs: glabs.ok ? "up" : "down",
-    gemini: isGeminiConfigured() ? "configured" : "missing",
+    claude: isClaudeConfigured() ? "configured" : "missing",
     glabsBaseUrl: getGlabsBaseUrl(),
     checkedAt: Date.now(),
   };
