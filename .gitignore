@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# thumbnail factory data
+/data/
+/.claude/
+
+# archives / junk (não versionar)
+*.zip
+/AGENTS.md.bak
