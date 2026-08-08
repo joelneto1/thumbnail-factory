@@ -8,10 +8,14 @@ import {
   startGeneration,
   loadReferencesForGeneration,
 } from "@/lib/engines/orchestrator";
+import { requireSession } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   const body = await req.json().catch(() => null);
   const parsed = generateRequestSchema.safeParse(body);
   if (!parsed.success) {

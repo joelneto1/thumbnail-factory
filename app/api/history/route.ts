@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 
 import { generationsRepo, variantsRepo, personasRepo } from "@/lib/db";
+import { requireSession } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   const { searchParams } = new URL(req.url);
   const personaId = searchParams.get("personaId") ?? undefined;
   const cursorRaw = searchParams.get("cursor");

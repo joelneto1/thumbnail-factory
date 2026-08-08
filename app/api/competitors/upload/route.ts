@@ -9,6 +9,7 @@ import {
   detectMime,
   extFromMime,
 } from "@/lib/files";
+import { requireSession } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,9 @@ export const dynamic = "force-dynamic";
  * Salva em data/competitors/upload_{nanoid}.{ext} e retorna o relpath.
  */
 export async function POST(req: Request) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   const form = await req.formData().catch(() => null);
   const file = form?.get("file");
   if (!(file instanceof File)) {

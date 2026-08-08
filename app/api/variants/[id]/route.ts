@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { generationsRepo, variantsRepo, recomputeGenerationStatus } from "@/lib/db";
 import { deleteIfExists, resolveDataPath } from "@/lib/files";
+import { requireSession } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,9 @@ interface Params {
 }
 
 export async function DELETE(_req: Request, { params }: Params) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   const { id } = await params;
   const variant = variantsRepo.get(id);
   if (!variant) {

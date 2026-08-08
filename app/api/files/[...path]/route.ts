@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
 
 import { resolveDataPath, detectMime } from "@/lib/files";
+import { requireSession } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,9 @@ interface Params {
 }
 
 export async function GET(_req: Request, { params }: Params) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   const { path: parts } = await params;
   if (!parts || parts.length === 0) {
     return NextResponse.json({ error: "Caminho vazio" }, { status: 400 });

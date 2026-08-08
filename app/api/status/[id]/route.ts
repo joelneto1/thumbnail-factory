@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { generationsRepo, variantsRepo, personasRepo } from "@/lib/db";
 import { pollPendingVariants } from "@/lib/engines/orchestrator";
+import { requireSession } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,9 @@ interface Params {
 }
 
 export async function GET(_req: Request, { params }: Params) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   const { id } = await params;
   const generation = generationsRepo.get(id);
   if (!generation) {
@@ -31,6 +35,9 @@ export async function GET(_req: Request, { params }: Params) {
 }
 
 export async function DELETE(_req: Request, { params }: Params) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   const { id } = await params;
   const generation = generationsRepo.get(id);
   if (!generation) {

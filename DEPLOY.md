@@ -42,8 +42,30 @@ As chaves **NÃO** vão no repo — configure aqui:
 | `CLI_PROXY_API_KEY` | *(sua chave `cpw_...`)* |
 | `CLI_PROXY_MODEL` | `claude-opus-4-8` |
 | `CLI_PROXY_REASONING_EFFORT` | `high` |
+| `AUTH_USERNAME` | *(seu usuário de login)* |
+| `AUTH_PASSWORD_HASH` | *(`scrypt:...` — veja abaixo)* |
+| `AUTH_SECRET` | *(64 hex aleatórios)* |
 
 > `NODE_ENV`, `PORT` e `HOSTNAME` já vêm do Dockerfile — não precisa setar.
+
+### Autenticação (obrigatória)
+
+O app **exige login**. Sem as três variáveis `AUTH_*`, ele nega todo acesso —
+falha fechada de propósito, pra nunca subir aberto por engano.
+
+Para gerar um conjunto novo (senha aleatória + hash + segredo):
+
+```bash
+node scripts/gen-credentials.mjs
+```
+
+O script imprime as três variáveis prontas pra colar, e a senha em texto **uma
+única vez** — ela não fica gravada em lugar nenhum. Guarde no seu gerenciador
+de senhas.
+
+Para trocar a senha depois: rode o script de novo, atualize
+`AUTH_PASSWORD_HASH` no Coolify e redeploy. Trocar `AUTH_SECRET` derruba todas
+as sessões abertas — é o botão de pânico se você achar que a senha vazou.
 
 ---
 

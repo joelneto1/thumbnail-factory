@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { fetchCompetitorFromUrl } from "@/lib/youtube";
+import { requireSession } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   const { searchParams } = new URL(req.url);
   const url = searchParams.get("url");
   if (!url) {

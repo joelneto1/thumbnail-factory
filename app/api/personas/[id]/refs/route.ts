@@ -12,6 +12,7 @@ import {
   resolveDataPath,
   deleteIfExists,
 } from "@/lib/files";
+import { requireSession } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,9 @@ interface Params {
  * - style: append em style_paths
  */
 export async function POST(req: Request, { params }: Params) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   const { id } = await params;
   const persona = personasRepo.get(id);
   if (!persona) {
@@ -90,6 +94,9 @@ export async function POST(req: Request, { params }: Params) {
  * Remove um style ref específico (ou face — limpa o slot).
  */
 export async function DELETE(req: Request, { params }: Params) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   const { id } = await params;
   const persona = personasRepo.get(id);
   if (!persona) {

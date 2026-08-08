@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search } from "lucide-react";
+import { LogOut, Search } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useHealth } from "./engine-status-dot";
@@ -20,6 +20,16 @@ export function TopNav() {
   const pathname = usePathname();
   const { open } = useCommandPalette();
   const { data: health } = useHealth();
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    // Reload completo: o proxy é quem redireciona pro /login depois que o
+    // cookie some, então não dá pra resolver isso no router do cliente.
+    window.location.assign("/login");
+  }
+
+  // A tela de login não tem nav — nem faz sentido, nem há sessão pra mostrar.
+  if (pathname === "/login") return null;
 
   return (
     <header
@@ -119,6 +129,15 @@ export function TopNav() {
             Claude
           </span>
         </div>
+
+        <button
+          onClick={logout}
+          title="Sair"
+          aria-label="Sair"
+          className="flex items-center justify-center rounded-lg border border-[var(--line-2)] bg-[var(--bg-2)] p-2 text-[var(--ink-3)] transition-colors hover:border-[var(--line-3)] hover:text-[var(--ink)]"
+        >
+          <LogOut className="size-3.5" />
+        </button>
       </div>
     </header>
   );

@@ -2,10 +2,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getSettingsStatus, setSetting, SETTING_KEYS } from "@/lib/settings";
+import { requireSession } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   return NextResponse.json({ settings: getSettingsStatus() });
 }
 
@@ -19,6 +23,9 @@ const updateSchema = z.object({
 });
 
 export async function POST(req: Request) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   const body = await req.json().catch(() => null);
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {

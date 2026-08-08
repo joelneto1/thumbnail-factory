@@ -12,6 +12,7 @@ import {
   toRelative,
   writeBuffer,
 } from "@/lib/files";
+import { requireSession } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,9 @@ interface Params {
  * uma nova style ref. Usado pra "Use as style ref" no workbench.
  */
 export async function POST(req: Request, { params }: Params) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   const { id } = await params;
   const persona = personasRepo.get(id);
   if (!persona) {

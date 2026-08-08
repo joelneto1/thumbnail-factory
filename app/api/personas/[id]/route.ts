@@ -4,6 +4,7 @@ import path from "node:path";
 import { personasRepo } from "@/lib/db";
 import { PERSONAS_DIR, deleteIfExists } from "@/lib/files";
 import { updatePersonaSchema } from "@/lib/schema";
+import { requireSession } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,9 @@ interface Params {
 }
 
 export async function GET(_req: Request, { params }: Params) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   const { id } = await params;
   const persona = personasRepo.get(id);
   if (!persona) {
@@ -21,6 +25,9 @@ export async function GET(_req: Request, { params }: Params) {
 }
 
 export async function PATCH(req: Request, { params }: Params) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   const { id } = await params;
   const body = await req.json().catch(() => null);
   const parsed = updatePersonaSchema.safeParse(body);
@@ -38,6 +45,9 @@ export async function PATCH(req: Request, { params }: Params) {
 }
 
 export async function DELETE(_req: Request, { params }: Params) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   const { id } = await params;
   const persona = personasRepo.get(id);
   if (!persona) {

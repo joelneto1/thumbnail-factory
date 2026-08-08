@@ -6,14 +6,21 @@ import fs from "node:fs/promises";
 import { personasRepo } from "@/lib/db";
 import { PERSONAS_DIR } from "@/lib/files";
 import { createPersonaSchema } from "@/lib/schema";
+import { requireSession } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   return NextResponse.json({ personas: personasRepo.list() });
 }
 
 export async function POST(req: Request) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   const body = await req.json().catch(() => null);
   const parsed = createPersonaSchema.safeParse(body);
   if (!parsed.success) {

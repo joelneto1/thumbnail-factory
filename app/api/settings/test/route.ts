@@ -3,10 +3,14 @@ import { NextResponse } from "next/server";
 import { checkGlabsHealth } from "@/lib/engines/glabs";
 import { callClaude, isClaudeConfigured } from "@/lib/engines/claude";
 import { getGlabsBaseUrl, getCliProxyBaseUrl, getCliProxyModel } from "@/lib/settings";
+import { requireSession } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  const denied = await requireSession();
+  if (denied) return denied;
+
   const body = await req.json().catch(() => null);
   const engine = body?.engine as "glabs" | "claude" | undefined;
   if (!engine) {
