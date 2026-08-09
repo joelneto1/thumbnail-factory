@@ -736,6 +736,8 @@ function RemodelSwaps({
   setTextSwaps: (s: TextSwap[]) => void;
   setObjectSwaps: (s: ObjectSwap[]) => void;
 }) {
+  const [adapting, setAdapting] = React.useState(false);
+
   if (isAnalyzing) {
     return (
       <div className="flex items-center gap-3 rounded-lg border border-[var(--accent)]/30 bg-[var(--accent)]/5 px-4 py-3">
@@ -781,15 +783,30 @@ function RemodelSwaps({
         </div>
       </div>
 
-      <LanguageBar textSwaps={textSwaps} setTextSwaps={setTextSwaps} />
-
-      <SwapList
-        kind="text"
-        icon={<Type className="size-3.5" />}
-        label="Texto"
-        swaps={textSwaps}
-        setSwaps={setTextSwaps}
+      <LanguageBar
+        textSwaps={textSwaps}
+        setTextSwaps={setTextSwaps}
+        onBusyChange={setAdapting}
       />
+
+      {/* Travado durante a adaptação: editar um campo no meio faria a resposta
+          sobrescrever a edição ao chegar, e o texto sumiria sem explicação.
+          `inert` bloqueia interação e tira do foco/leitor de tela de uma vez. */}
+      <div
+        inert={adapting || undefined}
+        className={cn(
+          "transition-opacity",
+          adapting && "pointer-events-none opacity-40"
+        )}
+      >
+        <SwapList
+          kind="text"
+          icon={<Type className="size-3.5" />}
+          label="Texto"
+          swaps={textSwaps}
+          setSwaps={setTextSwaps}
+        />
+      </div>
       <SwapList
         kind="object"
         icon={<Box className="size-3.5" />}

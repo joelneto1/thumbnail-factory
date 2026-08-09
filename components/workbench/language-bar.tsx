@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Languages, Loader2 } from "lucide-react";
+import { Languages, Loader2, Lock } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { TextSwap } from "@/lib/types";
@@ -29,11 +29,17 @@ const LANGUAGES: Array<{ label: string; value: string }> = [
 export function LanguageBar({
   textSwaps,
   setTextSwaps,
+  onBusyChange,
 }: {
   textSwaps: TextSwap[];
   setTextSwaps: (s: TextSwap[]) => void;
+  /** Avisa o pai para travar a lista de textos enquanto a adaptação roda. */
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const [pending, setPending] = React.useState<string | null>(null);
+  const [running, setRunning] = React.useState(false);
+  const startedAtRef = React.useRef(0);
+  const [pct, setPct] = React.useState(0);
   const [customOpen, setCustomOpen] = React.useState(false);
   const [custom, setCustom] = React.useState("");
 
@@ -42,9 +48,40 @@ export function LanguageBar({
   );
   const disabled = adaptable.length === 0 || pending !== null;
 
+  /**
+   * Progresso sintético, mesmo padrão do thumb-card.
+   *
+   * Não existe progresso real a reportar: a adaptação é UMA chamada ao Claude
+   * que volta com tudo de uma vez, sem streaming nem resultado parcial. A
+   * curva assintótica sobe rápido, desacelera e trava em 99% — quem fecha em
+   * 100% é a conclusão de verdade, nunca o relógio.
+   *
+   * O tempo típico escala com a quantidade de textos, que é o que manda na
+   * duração: medido em ~10s para 5 textos e ~25s para 12.
+   */
+  React.useEffect(() => {
+    if (!running) return;
+    // O carimbo de tempo é lido AQUI, não no handler: `Date.now()` é impuro e
+    // fora de um efeito o compilador do React não consegue provar que não roda
+    // durante o render.
+    startedAtRef.current = Date.now();
+    const typicalMs = 4000 + adaptable.length * 1800;
+    // setState só dentro do callback do intervalo — o efeito assina uma fonte
+    // externa (o relógio) em vez de escrever estado no próprio corpo, que é o
+    // que dispara renders em cascata.
+    const id = window.setInterval(() => {
+      const elapsed = Date.now() - startedAtRef.current;
+      setPct(Math.min(99, (1 - Math.exp(-elapsed / typicalMs)) * 99));
+    }, 200);
+    return () => window.clearInterval(id);
+  }, [running, adaptable.length]);
+
   async function adapt(languageValue: string, languageLabel: string) {
     if (adaptable.length === 0) return;
     setPending(languageLabel);
+    setPct(0);
+    setRunning(true);
+    onBusyChange?.(true);
     try {
       const res = await fetch("/api/adapt-text", {
         method: "POST",
@@ -94,7 +131,11 @@ export function LanguageBar({
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
+      // A barra desmonta aqui, com ou sem erro; quem confirma o desfecho é o
+      // toast. Nunca fica travada em 99% após uma falha.
       setPending(null);
+      setRunning(false);
+      onBusyChange?.(false);
     }
   }
 
@@ -168,7 +209,36 @@ export function LanguageBar({
         </div>
       )}
 
-      {adaptable.length === 0 && (
+      {pending && (
+        <div className="space-y-1.5 rounded-md border border-[var(--accent)]/30 bg-[var(--accent)]/5 px-2 py-2">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--accent)]">
+              Adaptando para {pending}
+            </span>
+            <span className="display tabular text-[13px] font-semibold leading-none text-[var(--ink)]">
+              {Math.round(pct)}%
+            </span>
+          </div>
+
+          <div className="relative h-1 w-full overflow-hidden rounded-full bg-[var(--line-2)]">
+            <div
+              className="absolute inset-y-0 left-0 transition-[width] duration-200"
+              style={{ width: `${pct}%`, background: "var(--grad-cta)" }}
+            />
+          </div>
+
+          <p className="flex items-start gap-1.5 text-[10px] leading-relaxed text-[var(--ink-3)]">
+            <Lock className="mt-[1px] size-3 shrink-0 text-[var(--ink-4)]" />
+            <span>
+              Não clique nem saia da página até terminar — a lista de textos
+              está travada e será preenchida de uma vez ao final.
+              {adaptable.length > 6 && " Com muitos textos pode levar ~30s."}
+            </span>
+          </p>
+        </div>
+      )}
+
+      {adaptable.length === 0 && !pending && (
         <p className="text-[10px] leading-relaxed text-[var(--ink-4)]">
           Nenhum texto em modo Swap. Textos em Keep são preservados no idioma
           original.
