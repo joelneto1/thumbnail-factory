@@ -163,14 +163,53 @@ export async function submitGptImage(params: {
 }
 
 export async function getStatus(taskId: string): Promise<GlabsTaskStatus> {
-  const res = await fetch(`${baseUrl()}/api/status/${taskId}`, {
-    headers: { "X-API-Key": apiKey() },
-    cache: "no-store",
-  });
+  const url = `${baseUrl()}/api/status/${taskId}`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { "X-API-Key": apiKey() },
+      cache: "no-store",
+    });
+  } catch (err) {
+    throw new GlabsError(
+      `G-Labs inacessível em ${url}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+      undefined,
+      { url }
+    );
+  }
   if (!res.ok) {
     throw new GlabsError(`Status falhou (${res.status})`, res.status);
   }
   return (await res.json()) as GlabsTaskStatus;
+}
+
+/**
+ * Reaponta a URL de um resultado para o host configurado, preservando só o
+ * caminho.
+ *
+ * O G-Labs devolve `results` com URL ABSOLUTA do host dele — na prática
+ * `http://127.0.0.1:8765/api/files/...`, porque é onde ele escuta. Usar isso
+ * como veio só funciona na máquina que roda o G-Labs. No servidor,
+ * `127.0.0.1` é o próprio container: a submissão passa (usa o base
+ * configurado), o G-Labs gera, e o download morre com "fetch failed".
+ *
+ * Por isso o host do resultado nunca é confiável: vale o caminho.
+ */
+function resolveResultUrl(raw: string): string {
+  const base = baseUrl();
+  if (!raw) throw new GlabsError("Resultado sem URL");
+
+  if (!/^https?:\/\//i.test(raw)) {
+    return `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
+  }
+  try {
+    const parsed = new URL(raw);
+    return `${base}${parsed.pathname}${parsed.search}`;
+  } catch {
+    return `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
+  }
 }
 
 /**
@@ -181,26 +220,33 @@ export async function getStatus(taskId: string): Promise<GlabsTaskStatus> {
 export async function downloadResult(
   result: string | { url?: string; filename?: string }
 ): Promise<{ buffer: Buffer; filename: string }> {
-  let url: string;
-  let filename: string;
+  const raw = typeof result === "string" ? result : result.url ?? "";
+  const url = resolveResultUrl(raw);
+  const filename =
+    (typeof result === "string" ? undefined : result.filename) ??
+    url.split("/").pop() ??
+    "result.png";
 
-  if (typeof result === "string") {
-    url = result.startsWith("http")
-      ? result
-      : `${baseUrl()}${result.startsWith("/") ? "" : "/"}${result}`;
-    filename = url.split("/").pop() ?? "result.png";
-  } else {
-    const u = result.url ?? "";
-    url = u.startsWith("http") ? u : `${baseUrl()}${u.startsWith("/") ? "" : "/"}${u}`;
-    filename = result.filename ?? url.split("/").pop() ?? "result.png";
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { "X-API-Key": apiKey() },
+      cache: "no-store",
+    });
+  } catch (err) {
+    // "fetch failed" sozinho não diz nada; sem a URL não dá para saber se o
+    // problema é host, rede ou túnel.
+    throw new GlabsError(
+      `Não foi possível baixar o resultado em ${url}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+      undefined,
+      { url, original: raw }
+    );
   }
 
-  const res = await fetch(url, {
-    headers: { "X-API-Key": apiKey() },
-    cache: "no-store",
-  });
   if (!res.ok) {
-    throw new GlabsError(`Download falhou (${res.status})`, res.status);
+    throw new GlabsError(`Download falhou (${res.status}) em ${url}`, res.status);
   }
   const buffer = Buffer.from(await res.arrayBuffer());
   return { buffer, filename };
