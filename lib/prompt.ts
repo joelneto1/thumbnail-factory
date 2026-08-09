@@ -96,7 +96,7 @@ export function buildRemodelPrompt(p: RemodelParams): string {
     // diferente resolve o bloqueio E é o comportamento correto.
     lines.push("");
     lines.push(
-      "PEOPLE: do NOT reproduce, copy or resemble any person appearing in the anchor reference. If the layout needs a person in that spot, invent a completely different, generic, non-identifiable person — different face, different hair, different build — keeping only the pose, framing, scale and lighting so the composition still works. The anchor is a layout reference, never a likeness reference."
+      "PEOPLE — THIS RULE OVERRIDES EVERYTHING BELOW: do NOT reproduce, copy or resemble any person appearing in the anchor reference. Invent a completely different, generic, non-identifiable person for that spot — free to differ in gender, age, ethnicity, hair and build. Nothing about their appearance needs to match the reference; only the pose, framing, scale and lighting are borrowed, so the composition still reads. The anchor is a layout reference, never a likeness reference. If any item in the lists below names a person, this rule wins: their described appearance is NOT a constraint."
     );
   }
 
@@ -157,9 +157,15 @@ export function buildRemodelPrompt(p: RemodelParams): string {
   }
   if (keptObjSwaps.length > 0) {
     lines.push("");
+    // A análise classifica pessoas como "objetos", então a lista de manter
+    // frequentemente inclui alguém. Sem persona isso contradiz a regra PEOPLE
+    // — mandava preservar a pessoa do anchor duas linhas depois de proibir.
     lines.push(
       "Keep the following objects unchanged: " +
-        keptObjSwaps.map((s) => s.original).join(", ")
+        keptObjSwaps.map((s) => s.original).join(", ") +
+        (hasPersona
+          ? ""
+          : ". This list describes SCENERY only. If any entry names a person, ignore its description entirely — keep just the fact that someone occupies that spot, and invent them freely per the PEOPLE rule, including a different gender if you like.")
     );
   }
 

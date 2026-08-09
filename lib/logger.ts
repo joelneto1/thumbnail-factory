@@ -134,7 +134,10 @@ export function explainEngineError(
     case 403:
       return "Permissão negada pela conta conectada na extensão.";
     case 400:
-      return "Requisição recusada — normalmente política de conteúdo do provedor.";
+      return (
+        "Recusado por política de conteúdo do provedor. Em modo Recriar SEM persona, a causa mais comum é a thumbnail de referência conter uma pessoa real: sem uma face própria anexada, o pedido se aproxima de reproduzir a semelhança dela, e o filtro barra. " +
+        "A solução robusta é selecionar uma persona — aí a pessoa gerada é o seu apresentador, não alguém do anchor. O filtro é probabilístico, então tentar de novo às vezes passa, mas sem persona a taxa de bloqueio segue alta."
+      );
     case 500:
       return "Erro no servidor do provedor. Tentar de novo costuma resolver.";
     default:
