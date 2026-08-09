@@ -252,9 +252,12 @@ maiúsculas):
 | `500` | Erro no servidor upstream |
 | `0` | **Erro de validação/ambiente** |
 
-O `error_code` é evidência muito melhor que o texto do `error`. Ver a
-tradução em [`lib/logger.ts`](../lib/logger.ts) (`explainEngineError`), que
-alimenta a aba `/logs`.
+**O `error_code` é evidência muito melhor que o texto do `error`.** O texto é
+genérico e frequentemente aponta para o lugar errado — o caso clássico é o
+código `0` no canal OpenAI, que devolve *"Invalid request. Check the prompt and
+reference images (format/size)"* quando o problema não tem nada a ver com
+prompt nem imagens (ver a seção de restrições). Sempre registre o `error_code`
+junto do texto.
 
 ---
 
@@ -279,21 +282,127 @@ alimenta a aba `/logs`.
 
 ---
 
-## O que este projeto usa
+## Exemplos (curl)
 
-Implementado em [`lib/engines/glabs.ts`](../lib/engines/glabs.ts):
+> Troque `SUA_CHAVE_AQUI` pela sua chave. **Cuidado:** a interface do G-Labs
+> exibe esses mesmos exemplos já com a sua chave real preenchida — não copie
+> de lá para lugares públicos.
 
-| Engine do app | Endpoint | Parâmetros fixos |
-|---|---|---|
-| `glabs` | `/api/image/generate` | `model: nano_banana_pro`, `aspect_ratio: 16:9` |
-| `gpt-image-2` | `/api/openai/generate` | `quality: high`, `prompt_mode: direct`, `reasoning: medium`, `web_search: false`, `aspect_ratio: 16:9` |
+```bash
+# Health (sem auth)
+curl http://127.0.0.1:8765/api/health
 
-`prompt_mode: "direct"` é deliberado: no default (`auto`) a OpenAI reescreve o
-prompt, o que desmontaria a estrutura montada em
-[`lib/prompt.ts`](../lib/prompt.ts).
+# Image — básico
+curl -X POST http://127.0.0.1:8765/api/image/generate \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: SUA_CHAVE_AQUI" \
+  -d '{"prompt": "a cat wearing sunglasses", "model": "nano_banana_2"}'
 
-**A ordem das referências é contratual**, não estética: o prompt de remodelar
-instrui o modelo a usar a PRIMEIRA imagem como face e a ÚLTIMA como thumbnail
-a remodelar. Ao cortar para caber no teto da engine, só styles do meio são
-descartados — ver `selectReferences` em
-[`lib/engines/orchestrator.ts`](../lib/engines/orchestrator.ts).
+# Image — com referência
+curl -X POST http://127.0.0.1:8765/api/image/generate \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: SUA_CHAVE_AQUI" \
+  -d '{"prompt": "same person", "model": "nano_banana_2", "reference_images": ["data:image/png;base64,..."]}'
+
+# Image — com upscale 4K (exige ULTRA)
+curl -X POST http://127.0.0.1:8765/api/image/generate \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: SUA_CHAVE_AQUI" \
+  -d '{"prompt": "modern house", "model": "nano_banana_pro", "reference_images": ["data:image/png;base64,..."], "upscale": ["4K"]}'
+
+# Video — a partir de imagem inicial
+curl -X POST http://127.0.0.1:8765/api/video/generate \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: SUA_CHAVE_AQUI" \
+  -d '{"prompt": "flowing water", "mode": "start_image", "reference_images": ["data:image/png;base64,..."], "resolution": ["1080p"]}'
+
+# Video — modo components com voz
+curl -X POST http://127.0.0.1:8765/api/video/generate \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: SUA_CHAVE_AQUI" \
+  -d '{"prompt": "she says hello", "mode": "components", "reference_images": ["data:image/png;base64,..."], "voice": "aoede"}'
+
+# Grok — texto para imagem
+curl -X POST http://127.0.0.1:8765/api/grok/generate \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: SUA_CHAVE_AQUI" \
+  -d '{"prompt": "a girl swimming in a pool", "mode": "t2i", "aspect_ratio": "16:9"}'
+
+# Grok — texto para vídeo
+curl -X POST http://127.0.0.1:8765/api/grok/generate \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: SUA_CHAVE_AQUI" \
+  -d '{"prompt": "neon city at night", "mode": "t2v", "aspect_ratio": "9:16", "video_length": 6, "resolution": "480p"}'
+
+# Meta AI — texto para imagem
+curl -X POST http://127.0.0.1:8765/api/meta/generate \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: SUA_CHAVE_AQUI" \
+  -d '{"prompt": "a cat astronaut", "mode": "t2i", "aspect_ratio": "1:1", "count": 1}'
+
+# Meta AI — imagem para imagem (componentes nomeados)
+curl -X POST http://127.0.0.1:8765/api/meta/generate \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: SUA_CHAVE_AQUI" \
+  -d '{"prompt": "same character in a forest", "mode": "i2i", "aspect_ratio": "16:9", "character_image": "data:image/png;base64,...", "scene_image": "data:image/png;base64,..."}'
+
+# OpenAI GPT Image 2 — texto para imagem
+curl -X POST http://127.0.0.1:8765/api/openai/generate \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: SUA_CHAVE_AQUI" \
+  -d '{"prompt": "a modern minimalist house, golden hour", "aspect_ratio": "16:9", "quality": "high"}'
+
+# OpenAI GPT Image 2 — com referências (posicionais, sem @tag)
+curl -X POST http://127.0.0.1:8765/api/openai/generate \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: SUA_CHAVE_AQUI" \
+  -d '{"prompt": "same subject on a beach", "aspect_ratio": "1:1", "reference_images": ["data:image/png;base64,..."]}'
+
+# Consultar status
+curl http://127.0.0.1:8765/api/status/TASK_ID -H "X-API-Key: SUA_CHAVE_AQUI"
+
+# Listar tarefas recentes
+curl http://127.0.0.1:8765/api/tasks -H "X-API-Key: SUA_CHAVE_AQUI"
+```
+
+---
+
+## Armadilhas ao integrar
+
+Aprendidas na prática, custaram tempo:
+
+**1. A URL do resultado aponta para o host do G-Labs, não para o seu.**
+
+O campo `results` traz URL **absoluta**, tipicamente
+`http://127.0.0.1:8765/api/files/...`, porque é onde o G-Labs escuta. Se o seu
+sistema roda em outra máquina (servidor, container, VPS), usar essa URL como
+veio falha — `127.0.0.1` ali é o *seu* host, não o dele. **Descarte o host do
+resultado e aproveite só o caminho**, reapontando para a base configurada:
+
+```js
+const parsed = new URL(rawResultUrl);
+const url = `${BASE_URL}${parsed.pathname}${parsed.search}`;
+```
+
+O sintoma é confuso: a submissão passa, o G-Labs gera a imagem normalmente, e
+só o download quebra.
+
+**2. `prompt_mode: "auto"` reescreve o seu prompt (GPT Image 2).**
+
+É o padrão. A OpenAI refina o texto antes de gerar, o que destrói prompts
+estruturados — posições, blocos de preservação, referências por posição. Use
+`"direct"` quando o prompt for engenheirado. Não há erro; o resultado só piora.
+
+**3. `@tag` não funciona no canal OpenAI.**
+
+Amarrar imagens por nome (`@red_car`) só existe em Image e Veo. No
+`/api/openai/generate` as referências são **posicionais** — se o seu prompt
+depende de qual imagem é qual, garanta a ordem no array.
+
+**4. Os tetos de referência variam por endpoint** (10 / 3 / 5 / 5). Ao cortar
+para caber, decida conscientemente o que descartar: se o prompt referencia
+imagens por posição, remover a errada muda o significado sem gerar erro.
+
+**5. As tasks vivem só em memória.** Reiniciar o G-Labs perde tudo que estava
+em andamento. Trate `404` no status como "task perdida", não como erro
+transitório a repetir.
