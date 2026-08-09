@@ -112,6 +112,56 @@ export async function submitImage(params: {
   return data.task_id;
 }
 
+/**
+ * Submete uma geração ao GPT Image 2 (OpenAI via G-Labs). Retorna o task_id.
+ *
+ * Rota própria (`/api/openai/generate`), diferente de `/api/image/generate`:
+ * não aceita `model` nem `upscale`, e o teto de referências é 5 (contra 10).
+ *
+ * `prompt_mode: "direct"` é deliberado. No default (`auto`) a OpenAI reescreve
+ * o prompt antes de gerar, o que desmontaria a estrutura que `lib/prompt.ts`
+ * monta (headlines posicionadas, âncora de composição, ordem das referências).
+ */
+export async function submitGptImage(params: {
+  prompt: string;
+  referenceImages: string[]; // data URLs base64, máx. 5
+  aspectRatio?: "16:9" | "9:16";
+}): Promise<string> {
+  const body = {
+    prompt: params.prompt,
+    aspect_ratio: params.aspectRatio ?? "16:9",
+    quality: "high",
+    prompt_mode: "direct",
+    reasoning: "medium",
+    web_search: false,
+    reference_images: params.referenceImages,
+  };
+
+  const res = await fetch(`${baseUrl()}/api/openai/generate`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+
+  if (res.status === 401) {
+    throw new GlabsError("G-Labs API key inválida ou faltando", 401);
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    throw new GlabsError(
+      `GPT Image 2 rejeitou a geração (${res.status}) — confira se a conta ChatGPT está logada e habilitada no G-Labs`,
+      res.status,
+      text
+    );
+  }
+
+  const data = (await res.json()) as { task_id?: string };
+  if (!data.task_id) {
+    throw new GlabsError("Resposta sem task_id", undefined, data);
+  }
+  return data.task_id;
+}
+
 export async function getStatus(taskId: string): Promise<GlabsTaskStatus> {
   const res = await fetch(`${baseUrl()}/api/status/${taskId}`, {
     headers: { "X-API-Key": apiKey() },

@@ -7,6 +7,8 @@ import { buildFromScratchPrompt, buildRemodelPrompt } from "@/lib/prompt";
 import {
   startGeneration,
   loadReferencesForGeneration,
+  selectReferences,
+  type ReferenceSet,
 } from "@/lib/engines/orchestrator";
 import { requireSession } from "@/lib/auth/guard";
 
@@ -25,14 +27,6 @@ export async function POST(req: Request) {
     );
   }
   const data = parsed.data;
-
-  // Engine "gpt-image-2" é placeholder — coming soon.
-  if (data.engine === "gpt-image-2") {
-    return NextResponse.json(
-      { error: "GPT Image 2.0 ainda não está disponível. Em breve." },
-      { status: 400 }
-    );
-  }
 
   // Persona é opcional. Se vier, valida a existência e a face.
   const personaId = data.personaId?.trim() || null;
@@ -105,9 +99,9 @@ export async function POST(req: Request) {
     });
   }
 
-  let referenceImages: string[];
+  let referenceSet: ReferenceSet;
   try {
-    referenceImages = await loadReferencesForGeneration(
+    referenceSet = await loadReferencesForGeneration(
       persona?.id ?? null,
       competitorPath
     );
@@ -115,6 +109,40 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },
       { status: 400 }
+    );
+  }
+
+  // Cada engine tem seu teto de referências (GPT Image 2 aceita 5, o
+  // /api/image/generate aceita 10). O corte remove só styles — face e
+  // competitor são posicionais e o prompt depende deles.
+  const { images: referenceImages, droppedStyles } = selectReferences(
+    referenceSet,
+    data.engine
+  );
+
+  const warnings: string[] = [];
+  if (droppedStyles > 0) {
+    // Quando há corte, o array já está cheio até o teto da engine.
+    const limit = referenceImages.length;
+    const engineLabel =
+      data.engine === "gpt-image-2" ? "GPT Image 2" : "esta engine";
+    const plural =
+      droppedStyles > 1
+        ? `${droppedStyles} imagens de estilo foram descartadas`
+        : "1 imagem de estilo foi descartada";
+    // Só cita o que realmente existe nesta geração — o competitor é opcional.
+    const kept = [
+      referenceSet.face ? "a face da persona" : null,
+      referenceSet.competitor ? "a thumbnail do concorrente" : null,
+    ].filter(Boolean);
+    const keptList = kept.join(" e ");
+    const keptNote = kept.length
+      ? ` ${keptList.charAt(0).toUpperCase()}${keptList.slice(1)} ${
+          kept.length > 1 ? "foram preservadas" : "foi preservada"
+        }.`
+      : "";
+    warnings.push(
+      `${plural}: ${engineLabel} aceita no máximo ${limit} referências.${keptNote}`
     );
   }
 
@@ -151,5 +179,8 @@ export async function POST(req: Request) {
     engine: data.engine,
   });
 
-  return NextResponse.json({ generationId: id }, { status: 202 });
+  return NextResponse.json(
+    warnings.length ? { generationId: id, warnings } : { generationId: id },
+    { status: 202 }
+  );
 }

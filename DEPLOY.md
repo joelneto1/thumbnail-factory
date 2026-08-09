@@ -2,8 +2,10 @@
 
 Guia pra subir o Thumbnail Factory na VPS via Coolify, usando o `Dockerfile` do repo.
 
-> **Contexto:** app single-user, Next.js 16 (standalone). Imagem = **G-Labs**
-> (Nano Banana Pro). Texto/visão = **Claude Opus 4.8** via CLI Proxy. Estado em
+> **Contexto:** app single-user, Next.js 16 (standalone). Imagem = **G-Labs**,
+> em duas engines: **Nano Banana Pro** (`/api/image/generate`) e **GPT Image 2**
+> (`/api/openai/generate`) — mesmo host e mesma API key.
+> Texto/visão = **Claude Opus 4.8** via CLI Proxy. Estado em
 > SQLite + arquivos no disco (`/app/data`) — precisa de **volume persistente**.
 
 ---
@@ -102,6 +104,14 @@ retornar `{"glabs":"up"|"down", "claude":"configured", ...}`.
   Chrome + extensão G-Labs abertos localmente e o túnel Tailscale de pé. Se cair,
   `/api/health` mostra `glabs:down` e a geração falha (sem fallback — o Claude
   não gera imagem). É o comportamento esperado até o RunPod entrar.
+- **GPT Image 2 exige conta ChatGPT logada** na extensão do G-Labs, além do que
+  o Nano Banana já exige (conta Google). Se ela não estiver logada, a geração
+  falha só nessa engine — o `/api/health` continua `glabs:up`, porque o servidor
+  do G-Labs está de pé; quem está fora é a conta.
+- **GPT Image 2 aceita no máximo 5 referências** (contra 10 do Nano Banana). Se a
+  persona tiver styles demais, o app corta os styles excedentes e avisa na tela —
+  a face e a thumbnail do concorrente nunca são descartadas, porque o prompt
+  depende delas estarem na primeira e na última posição.
 - **Claude (CLI Proxy)** é acessível pela internet, então funciona da VPS direto.
 - **Módulo nativo:** o Dockerfile já copia o binário do `better-sqlite3`. Se
   aparecer erro de `better_sqlite3.node` no runtime, veja o passo de cópia da

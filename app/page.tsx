@@ -334,7 +334,7 @@ function WorkbenchPageInner() {
         const body = await r.json().catch(() => ({}));
         throw new Error(body.error ?? "Falha ao gerar");
       }
-      return r.json() as Promise<{ generationId: string }>;
+      return r.json() as Promise<{ generationId: string; warnings?: string[] }>;
     },
     onSuccess: (data) => {
       setGenerationId(data.generationId);
@@ -342,6 +342,8 @@ function WorkbenchPageInner() {
       toast.success(
         `${state.variants} variante${state.variants > 1 ? "s" : ""} na fila`
       );
+      // Ex.: styles descartados por causa do teto de referências da engine.
+      data.warnings?.forEach((w) => toast.warning(w, { duration: 8000 }));
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -502,12 +504,13 @@ function WorkbenchPageInner() {
         const body = await r.json().catch(() => ({}));
         throw new Error(body.error ?? "Falha ao refinar");
       }
-      return r.json() as Promise<{ generationId: string }>;
+      return r.json() as Promise<{ generationId: string; warnings?: string[] }>;
     },
     onSuccess: (data) => {
       setGenerationId(data.generationId);
       setRefineVariant(null);
       toast.success("Refinando — gerando nova versão");
+      data.warnings?.forEach((w) => toast.warning(w, { duration: 8000 }));
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -547,11 +550,12 @@ function WorkbenchPageInner() {
         const body = await r.json().catch(() => ({}));
         throw new Error(body.error ?? "Falha");
       }
-      return r.json() as Promise<{ generationId: string }>;
+      return r.json() as Promise<{ generationId: string; warnings?: string[] }>;
     },
     onSuccess: (data) => {
       setGenerationId(data.generationId);
       toast.success("Refazendo");
+      data.warnings?.forEach((w) => toast.warning(w, { duration: 8000 }));
     },
     onError: (e) => toast.error((e as Error).message),
   });

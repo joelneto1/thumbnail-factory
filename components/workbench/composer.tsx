@@ -156,12 +156,12 @@ export function Composer({
       avatar: <EngineMonogram id="glabs" />,
     },
     {
+      // Passa pelo mesmo G-Labs (host e API key), em rota própria:
+      // /api/openai/generate. Depende de uma conta ChatGPT logada na extensão.
       value: "gpt-image-2",
       label: "GPT Image 2.0",
-      meta: "OpenAI · em breve",
+      meta: `${health?.glabs === "up" ? "online" : "offline"} · OpenAI via G-Labs · máx. 5 refs`,
       avatar: <EngineMonogram id="gpt-image-2" />,
-      disabled: true,
-      badge: "em breve",
     },
   ];
 
