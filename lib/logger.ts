@@ -105,9 +105,16 @@ export const logger = {
  * G-Labs; conteúdo e rate limit têm mensagens próprias (`oa_msg_moderation`,
  * `oa_msg_rate_limited`), então nenhum dos dois é a causa quando ela aparece.
  *
- * A causa observada foi plano: o G-Labs exige ChatGPT Plus/MAX para o GPT
- * Image 2 ("GPT Image 2 is only available for PLUS/MAX plans!"), e conta no
- * tier Free falha aqui mesmo estando logada, habilitada e com status válido.
+ * O que já foi descartado investigando um caso real: não é o app (o corpo
+ * mínimo aceito pela API falha igual), não é o servidor do G-Labs (o canal
+ * Nano Banana funciona no mesmo instante), não é conteúdo nem cota (têm
+ * mensagens próprias), e não é a licença do G-Labs — a família
+ * `msg_*_plus_only` cobre Workflow, Grok, Meta e a própria Webhook API, que
+ * exige MAX e estava funcionando.
+ *
+ * Sobra o lado da conta ChatGPT. Para isolar, gere pela interface do G-Labs
+ * (aba GPT Image 2) com a mesma conta: se lá funcionar, o problema está no
+ * caminho da webhook; se falhar igual, está na conta ou no provedor.
  */
 export function explainEngineError(
   errorCode: number | null | undefined,
@@ -117,7 +124,7 @@ export function explainEngineError(
   switch (errorCode) {
     case 0:
       return isGpt
-        ? "Erro de validação/ambiente — NÃO é o prompt nem as imagens, apesar do que a mensagem do G-Labs diz. Em ordem de probabilidade: (1) a conta ChatGPT está no plano Free e o GPT Image 2 exige Plus/MAX; (2) nenhuma conta ChatGPT habilitada na extensão; (3) a conta não tem chatgpt_account_id. Confira o tier da conta na aba OpenAI do G-Labs."
+        ? "Erro de validação/ambiente — NÃO é o prompt nem as imagens, apesar do que a mensagem do G-Labs diz, e também não é conteúdo nem cota (essas têm mensagens próprias). O problema está no canal OpenAI do G-Labs. Para isolar: gere pela interface do G-Labs, aba GPT Image 2, com a mesma conta. Funcionando lá, o problema é o caminho da webhook; falhando igual, é a conta (tier, chatgpt_account_id) ou o provedor."
         : "Erro de validação/ambiente no G-Labs. Confira se a conta Google está logada e habilitada na extensão.";
     case 429:
       return isGpt

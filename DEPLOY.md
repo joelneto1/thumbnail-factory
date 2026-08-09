@@ -104,15 +104,20 @@ retornar `{"glabs":"up"|"down", "claude":"configured", ...}`.
   Chrome + extensão G-Labs abertos localmente e o túnel Tailscale de pé. Se cair,
   `/api/health` mostra `glabs:down` e a geração falha (sem fallback — o Claude
   não gera imagem). É o comportamento esperado até o RunPod entrar.
-- **GPT Image 2 exige conta ChatGPT em plano pago** (Plus/MAX) logada na
-  extensão do G-Labs, além do que o Nano Banana já exige (conta Google). Conta
-  no tier **Free falha** mesmo estando logada, habilitada e com status válido —
-  o G-Labs trava o recurso por plano ("GPT Image 2 is only available for
-  PLUS/MAX plans"). O sintoma é traiçoeiro: a mensagem devolvida é *"Invalid
-  request. Check the prompt and reference images (format/size)"*, que manda
-  procurar no lugar errado. O `/api/health` continua `glabs:up`, porque o
-  servidor do G-Labs está de pé; quem está fora é o plano da conta.
-  O tier de cada conta fica em `%APPDATA%/G-Labs Automation/openai_accounts.json`.
+- **GPT Image 2 exige conta ChatGPT** cadastrada na aba OpenAI do G-Labs, além
+  do que o Nano Banana já exige (conta Google). O `/api/health` continua
+  `glabs:up` quando essa conta falha, porque o servidor do G-Labs está de pé —
+  quem está fora é o canal OpenAI.
+- **Se o GPT Image 2 falhar com *"Invalid request. Check the prompt and
+  reference images (format/size)"*, não procure no prompt nem nas imagens.**
+  Essa é a mensagem genérica de bad request do G-Labs (`oa_msg_bad_request`);
+  conteúdo e cota têm mensagens próprias. Num caso real, já foram descartados:
+  o app (o corpo mínimo da API falha igual), o servidor do G-Labs (o Nano
+  Banana funciona no mesmo instante) e a licença do G-Labs (a Webhook API
+  exige MAX e estava no ar). Para isolar, gere pela interface do G-Labs, aba
+  GPT Image 2, com a mesma conta: funcionando lá, o problema é o caminho da
+  webhook; falhando igual, é a conta ou o provedor. O cadastro das contas fica
+  em `%APPDATA%/G-Labs Automation/openai_accounts.json`.
 - **GPT Image 2 aceita no máximo 5 referências** (contra 10 do Nano Banana). Se a
   persona tiver styles demais, o app corta os styles excedentes e avisa na tela —
   a face e a thumbnail do concorrente nunca são descartadas, porque o prompt

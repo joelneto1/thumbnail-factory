@@ -160,7 +160,7 @@ export function Composer({
       // /api/openai/generate. Depende de uma conta ChatGPT logada na extensão.
       value: "gpt-image-2",
       label: "GPT Image 2.0",
-      meta: `${health?.glabs === "up" ? "online" : "offline"} · exige ChatGPT Plus · máx. 5 refs`,
+      meta: `${health?.glabs === "up" ? "online" : "offline"} · exige conta ChatGPT no G-Labs · máx. 5 refs`,
       avatar: <EngineMonogram id="gpt-image-2" />,
     },
   ];
