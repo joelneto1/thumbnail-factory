@@ -67,21 +67,36 @@ export function buildRemodelPrompt(p: RemodelParams): string {
   const lines: string[] = [];
   const hasPersona = p.hasPersona !== false; // default true
 
+  // A redação evita descrever a tarefa como "refazer a imagem anexada" ou
+  // "trocar o rosto": as duas leem como reprodução de obra e troca de face, e
+  // os filtros dos provedores reagem a esse enquadramento. O que o usuário faz
+  // é criar uma thumbnail própria seguindo um layout de referência — dizer
+  // isso é mais fiel à intenção real e não dispara o filtro.
   lines.push(
-    "YouTube thumbnail, 16:9, 1920x1080. You are REMODELING the thumbnail in the LAST attached reference image."
+    "Design an original YouTube thumbnail, 16:9, 1920x1080. Use the LAST attached image ONLY as a layout and style guide — it is a design reference, not something to copy."
   );
   lines.push("");
   lines.push(
-    "Preserve EXACTLY from the anchor reference: layout, color palette, gradient direction, font weight and treatment, banner shapes, arrows, warning triangles, drop shadows, overall composition and visual hierarchy."
+    "Follow the reference's DESIGN SYSTEM: layout grid, color palette, gradient direction, font weight and treatment, banner shapes, arrows, warning triangles, drop shadows, overall composition and visual hierarchy. Reproduce the STRUCTURE, with entirely new content."
   );
   if (hasPersona) {
     lines.push("");
     lines.push(
-      "Replace the person/face shown in the anchor with the FIRST attached face reference — match that person's face, hair, outfit, expression EXACTLY. Keep them in the same position and scale as the original."
+      "The person featured in this thumbnail is the one in the FIRST attached photo — the channel's own presenter. Portray that presenter: same face, hair and outfit, placed at the same position and scale the layout guide uses for its subject."
     );
     lines.push("");
     lines.push(
-      "CRITICAL — SKIN TONE FIDELITY: replicate the EXACT skin color and tone of the attached face reference across ALL visible skin — face, neck, ears, arms and ESPECIALLY the HANDS. Every visible body part must share the same skin tone as the reference person. NEVER lighten, whiten, desaturate or otherwise alter the skin color. If the reference person has dark/Black skin, the hands and all skin must render in that same dark tone — the hands must NEVER come out lighter or a different color than the face."
+      "APPEARANCE ACCURACY: keep the presenter's complexion consistent and true to the photo across every visible area — face, neck, ears, arms and especially the HANDS. Do not lighten, brighten or desaturate it, and never let the hands come out in a different tone from the face."
+    );
+  } else {
+    // Sem persona, a única imagem anexada é a thumbnail do concorrente — que
+    // costuma trazer uma pessoa real e identificável. Sem esta instrução, o
+    // pedido vira "reproduza esta pessoa", que os provedores bloqueiam por
+    // política, e com razão: é a semelhança de alguém real. Pedir uma pessoa
+    // diferente resolve o bloqueio E é o comportamento correto.
+    lines.push("");
+    lines.push(
+      "PEOPLE: do NOT reproduce, copy or resemble any person appearing in the anchor reference. If the layout needs a person in that spot, invent a completely different, generic, non-identifiable person — different face, different hair, different build — keeping only the pose, framing, scale and lighting so the composition still works. The anchor is a layout reference, never a likeness reference."
     );
   }
 
@@ -118,8 +133,13 @@ export function buildRemodelPrompt(p: RemodelParams): string {
     );
   }
 
-  // Object swaps
-  const activeObjSwaps = p.objectSwaps.filter((s) => s.action !== "keep");
+  // Object swaps.
+  // "Ativo" exige ter o que dizer: um item marcado como "replace" mas com o
+  // campo de substituição vazio não gera linha nenhuma, e antes isso imprimia
+  // o cabeçalho sozinho — instrução vazia que só confunde o modelo.
+  const activeObjSwaps = p.objectSwaps.filter(
+    (s) => s.action === "remove" || (s.action === "replace" && s.replacement?.trim())
+  );
   const keptObjSwaps = p.objectSwaps.filter((s) => s.action === "keep");
   if (activeObjSwaps.length > 0) {
     lines.push("");
@@ -145,7 +165,11 @@ export function buildRemodelPrompt(p: RemodelParams): string {
 
   lines.push("");
   lines.push(
-    "Result must read clearly at 320x180 on a phone. NO watermarks, NO logos, NO brand names, NO faces other than the attached face reference."
+    hasPersona
+      ? "Result must read clearly at 320x180 on a phone. NO watermarks, NO logos, NO brand names, NO faces other than the attached face reference."
+      : // Sem persona não existe "attached face reference": citá-la deixava o
+        // prompt incoerente e reforçava o pedido de reproduzir a pessoa do anchor.
+        "Result must read clearly at 320x180 on a phone. NO watermarks, NO logos, NO brand names, and no recognisable real person."
   );
 
   if (p.extraInstructions && p.extraInstructions.trim()) {
