@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { fileUrl } from "@/lib/format";
 import { useHealth } from "@/components/shared/engine-status-dot";
 import { Chip, type ChipOption } from "./chip-picker";
+import { LanguageBar } from "./language-bar";
 import type {
   EngineId,
   Persona,
@@ -779,6 +780,8 @@ function RemodelSwaps({
           ))}
         </div>
       </div>
+
+      <LanguageBar textSwaps={textSwaps} setTextSwaps={setTextSwaps} />
 
       <SwapList
         kind="text"
