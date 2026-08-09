@@ -104,20 +104,19 @@ retornar `{"glabs":"up"|"down", "claude":"configured", ...}`.
   Chrome + extensão G-Labs abertos localmente e o túnel Tailscale de pé. Se cair,
   `/api/health` mostra `glabs:down` e a geração falha (sem fallback — o Claude
   não gera imagem). É o comportamento esperado até o RunPod entrar.
-- **GPT Image 2 exige conta ChatGPT** cadastrada na aba OpenAI do G-Labs, além
-  do que o Nano Banana já exige (conta Google). O `/api/health` continua
-  `glabs:up` quando essa conta falha, porque o servidor do G-Labs está de pé —
-  quem está fora é o canal OpenAI.
-- **Se o GPT Image 2 falhar com *"Invalid request. Check the prompt and
-  reference images (format/size)"*, não procure no prompt nem nas imagens.**
-  Essa é a mensagem genérica de bad request do G-Labs (`oa_msg_bad_request`);
-  conteúdo e cota têm mensagens próprias. Num caso real, já foram descartados:
-  o app (o corpo mínimo da API falha igual), o servidor do G-Labs (o Nano
-  Banana funciona no mesmo instante) e a licença do G-Labs (a Webhook API
-  exige MAX e estava no ar). Para isolar, gere pela interface do G-Labs, aba
-  GPT Image 2, com a mesma conta: funcionando lá, o problema é o caminho da
-  webhook; falhando igual, é a conta ou o provedor. O cadastro das contas fica
-  em `%APPDATA%/G-Labs Automation/openai_accounts.json`.
+- **GPT Image 2 exige conta ChatGPT em plano PAGO**, cadastrada na aba OpenAI
+  do G-Labs — confirmado com o suporte da plataforma. Isso é além do que o Nano
+  Banana já exige (conta Google com Gemini Pro/Ultra). Conta no tier Free falha
+  mesmo estando logada, habilitada e com `status=valid`. O tier de cada conta
+  fica em `%APPDATA%/G-Labs Automation/openai_accounts.json`; ele é lido no
+  login, então **depois de assinar é preciso remover e re-adicionar a conta**
+  para o G-Labs parar de tratá-la como Free.
+- **O sintoma é traiçoeiro:** a falha vem como *"Invalid request. Check the
+  prompt and reference images (format/size)"*, que manda procurar no prompt e
+  nas imagens. Não é isso — é o balde genérico de bad request do G-Labs
+  (`oa_msg_bad_request`); conteúdo e cota têm mensagens próprias. O
+  `/api/health` também continua `glabs:up`, porque o servidor está de pé; quem
+  está fora é o plano da conta.
 - **GPT Image 2 aceita no máximo 5 referências** (contra 10 do Nano Banana). Se a
   persona tiver styles demais, o app corta os styles excedentes e avisa na tela —
   a face e a thumbnail do concorrente nunca são descartadas, porque o prompt

@@ -266,7 +266,9 @@ alimenta a aba `/logs`.
 - **Image/Video**: exigem conta Google logada e habilitada (Gemini Pro/Ultra)
 - **Grok**: exige conexão Super Grok ativa
 - **Meta AI**: exige conta Meta logada e habilitada
-- **OpenAI**: exige conta ChatGPT logada e habilitada; **máx. 5 threads por conta**
+- **OpenAI**: exige conta ChatGPT logada, habilitada e em **plano PAGO**
+  (confirmado com o suporte da plataforma — conta Free falha com `error_code: 0`
+  mesmo com `status=valid`); **máx. 5 threads por conta**
 - Upscale 4K e vídeo 4K exigem ULTRA; 1080p funciona sem
 - Tasks vivem só em memória — somem se o app reiniciar
 
