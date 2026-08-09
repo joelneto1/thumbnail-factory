@@ -14,7 +14,7 @@ Extract from the attached image and return ONLY a JSON object with EXACTLY this 
   "detectedText": [ { "text": "<literal text>", "position": "<e.g. top-left, center, banner-top>", "color": "<e.g. white, yellow, white-on-red>", "style": "<e.g. bold-banner, main-headline, small-caption>" } ],
   "dominantColors": [ { "hex": "#1a4fa0", "name": "<short PT-BR name>", "role": "<background|accent|text|banner>" } ],
   "objects": [ { "name": "<short PT-BR description, NOT text>", "position": "<e.g. center, right-third, lower-left>" } ],
-  "composition": "<one-sentence layout summary>",
+  "composition": "<one-sentence LAYOUT summary — see rules>",
   "suggestedHeadlineTop": "<top banner text in CAPS, or omit>",
   "suggestedHeadlineMainWhite": "<main white headline in CAPS, or omit>",
   "suggestedHeadlineMainYellow": "<main yellow headline in CAPS, or omit>",
@@ -26,6 +26,7 @@ Rules:
 - Each entry carries its literal text, position, colour and style/role.
 - "dominantColors": top 3-5 colors with hex, a short PT-BR name and role.
 - "objects": distinct visual objects/elements (NOT text), short PT-BR descriptions.
+- "composition": describe WHERE things sit — panels, text blocks, image areas, proportions. Refer to any person ONLY by their role in the layout ("the presenter", "the subject"), NEVER by appearance: no gender, no age, no clothing, no expression. Write "the right third holds the presenter", never "the right third shows a smiling older woman in an apron".
 - Copy the original headline text into the suggested* fields, in CAPS.
 - Be concise. Return ONLY the JSON.`;
 

@@ -63,6 +63,30 @@ export interface RemodelParams {
   hasPersona?: boolean;
 }
 
+/**
+ * Detecta descrição física de pessoa no texto de composição.
+ *
+ * Medido contra o labs.google, isolando bloco a bloco: a MESMA requisição
+ * passa com "the right third shows the presenter" e é recusada com 400 quando
+ * a frase é "the right third shows a smiling older woman in an apron".
+ * Descrever alguém fisicamente junto de uma foto de rosto anexada é lido como
+ * pedido de semelhança, e o filtro barra.
+ *
+ * Detectar e OMITIR a frase inteira, em vez de reescrevê-la: substituição por
+ * regex produzia texto quebrado ("o apresentador madura sorrindo") e ainda
+ * deixava passar compostos como "businesswoman". A informação de layout é
+ * desejável, não essencial — o bloco de DESIGN SYSTEM já cobre estrutura.
+ *
+ * A correção principal está no prompt da análise, que não gera mais esse
+ * texto. Isto cobre o que ficou gravado em gerações antigas, reusadas ao
+ * refazer e refinar.
+ */
+function describesPerson(text: string): boolean {
+  return /\b(?:(?:business|sales|spokes|camera|police|fire|chair|weather|anchor)?(?:man|woman|men|women)|person|people|guy|lady|girl|boy|gentleman|homem|mulher|pessoa|senhora?|garot[oa]|mo[çc]a|rapaz)\b/i.test(
+    text
+  );
+}
+
 export function buildRemodelPrompt(p: RemodelParams): string {
   const lines: string[] = [];
   const hasPersona = p.hasPersona !== false; // default true
@@ -100,7 +124,8 @@ export function buildRemodelPrompt(p: RemodelParams): string {
     );
   }
 
-  if (p.compositionAnchor) {
+  // Anchor com descrição de pessoa é omitido por inteiro — ver describesPerson.
+  if (p.compositionAnchor && !describesPerson(p.compositionAnchor)) {
     lines.push("");
     lines.push(`Original composition: ${p.compositionAnchor}.`);
   }
