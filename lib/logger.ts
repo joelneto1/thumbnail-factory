@@ -134,10 +134,13 @@ export function explainEngineError(
     case 403:
       return "Permissão negada pela conta conectada na extensão.";
     case 400:
-      return (
-        "Recusado por política de conteúdo do provedor. Em modo Recriar SEM persona, a causa mais comum é a thumbnail de referência conter uma pessoa real: sem uma face própria anexada, o pedido se aproxima de reproduzir a semelhança dela, e o filtro barra. " +
-        "A solução robusta é selecionar uma persona — aí a pessoa gerada é o seu apresentador, não alguém do anchor. O filtro é probabilístico, então tentar de novo às vezes passa, mas sem persona a taxa de bloqueio segue alta."
-      );
+      return isGpt
+        ? "Recusado pela política de conteúdo da OpenAI. Reformule o texto ou troque a thumbnail de referência."
+        : // Medido: a MESMA thumbnail e o MESMO texto que o labs.google recusa
+          // passam no GPT Image 2. Reescrever a instrução não resolve — o filtro
+          // reage ao conteúdo que precisa ser renderizado, não ao seu enunciado.
+          "Recusado pela política de conteúdo do labs.google. O filtro da Google é mais restritivo que o da OpenAI em temas de conflito, ameaça, despejo e afins — e esse texto precisa aparecer na imagem, então reformular a instrução não adianta. " +
+          "Caminho prático: gerar esta thumbnail com o GPT Image 2, que costuma aceitar o mesmo material. Tentar de novo no Nano Banana às vezes passa, porque o filtro é probabilístico.";
     case 500:
       return "Erro no servidor do provedor. Tentar de novo costuma resolver.";
     default:
