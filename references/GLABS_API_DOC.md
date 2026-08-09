@@ -1,87 +1,197 @@
 # G-Labs Webhook API — Documentação
 
 > **Base URL**: `http://127.0.0.1:8765` (local) ou via Tailscale: `https://joel.tail739437.ts.net`
-> **Autenticação**: Header `X-API-Key` obrigatório (exceto `/api/health`)
-> **Licença**: Plano MAX necessário
+> **Autenticação**: Header `X-API-Key` obrigatório (exceto `/api/health` e `/api/files/{filename}`)
+> **Licença**: Plano MAX necessário para o servidor Webhook
+> **Versão de referência**: G-Labs Automation v8.0.0
+
+> ⚠️ **Nunca cole a API key real neste arquivo.** O repositório é público. Os
+> exemplos que o G-Labs mostra na própria interface vêm com a sua chave
+> preenchida — troque por `SUA_CHAVE_AQUI` antes de copiar qualquer coisa
+> para cá. A chave real vive apenas em `.env.local` (local, gitignored) e nas
+> Environment Variables do Coolify.
 
 ---
 
 ## Autenticação
 
-Todos os endpoints (exceto health check) requerem o header:
+Todos os endpoints (exceto health check e download de arquivo) requerem:
+
 ```
 X-API-Key: SUA_CHAVE_AQUI
 ```
 
-Chave ausente ou inválida retorna `401 Unauthorized`:
+Chave ausente ou inválida retorna `401`:
+
 ```json
-{"error": "invalid or missing API key"}
+{"error": "Invalid or missing API key"}
 ```
 
 ---
 
 ## Endpoints
 
-### 1. Health Check
+| Método | Endpoint | Auth | Descrição |
+|---|---|:---:|---|
+| GET | `/api/health` | ✗ | Status do servidor, uptime e tarefas pendentes |
+| POST | `/api/image/generate` | ✓ | Flow Image (Nano Banana / Veo) |
+| POST | `/api/video/generate` | ✓ | Flow Video |
+| POST | `/api/grok/generate` | ✓ | Grok AI (imagem e vídeo) |
+| POST | `/api/meta/generate` | ✓ | Meta AI (imagem e vídeo) |
+| POST | `/api/openai/generate` | ✓ | **OpenAI GPT Image 2** |
+| GET | `/api/status/{task_id}` | ✓ | Status da task, progresso e detalhe de erro |
+| GET | `/api/result/{task_id}` | ✓ | Resultado com URLs de download |
+| GET | `/api/files/{filename}` | ✗ | Baixa o arquivo gerado |
+| GET | `/api/tasks` | ✓ | Lista as 50 tasks recentes |
 
-```
-GET /api/health
-```
+### Fluxo assíncrono
 
-Sem autenticação. Retorna status do servidor, uptime, tasks pendentes e em execução.
+1. **Submeter** → `POST /api/{tipo}/generate` devolve `202` com `task_id`
+2. **Consultar** → `GET /api/status/{task_id}` até `completed` ou `failed`
+3. **Baixar** → cada URL do array `results` (sem auth)
+
+Intervalo de polling sugerido: 3–5 segundos.
 
 ---
 
-### 2. Geração de Imagem
+## Modelos disponíveis
 
+| model | Nome | Proporções |
+|---|---|---|
+| `nano_banana_pro` | Nano Banana Pro | 1:1, 3:4, 4:3, 9:16, 16:9 |
+| `nano_banana_2` | Nano Banana 2 | 1:1, 3:4, 4:3, 9:16, 16:9 |
+| `nano_banana_2_lite` | Nano Banana 2 Lite | 1:1, 3:4, 4:3, 9:16, 16:9 |
+| `veo_31_lite_relaxed` | Veo 3.1 Lite [prioridade baixa] | 16:9, 9:16 |
+| `veo_31_fast` | Veo 3.1 Fast | 16:9, 9:16 |
+| `veo_31_lite` | Veo 3.1 Lite | 16:9, 9:16 |
+| `veo_31_quality` | Veo 3.1 Quality | 16:9, 9:16 |
+| `omni_flash` | Omni Flash | 16:9, 9:16 |
+| `grok-3` (t2i/i2i/t2v/i2v) | Grok 3 | 9:16, 16:9, 1:1, 2:3, 3:2 |
+| `meta` (t2i/i2i/t2v/i2v) | Meta AI | 9:16, 16:9, 1:1 |
+| `openai (GPT_IMAGE)` | **GPT Image 2** | 1:1, 3:2, 4:3, 16:9, 2:3, 3:4, 9:16 |
+
+---
+
+## Corpos de requisição
+
+### Image — `POST /api/image/generate`
+
+```jsonc
+{
+  "prompt": "sua descrição",        // obrigatório
+  "model": "nano_banana_2",         // ver tabela (default nano_banana_2)
+  "aspect_ratio": "16:9",           // default 1:1
+  "reference_images": ["data:image/..."],  // opcional, até 10
+  "upscale": ["2K"]                 // opcional: "2K" | "4K" (4K exige ULTRA)
+}
 ```
-POST /api/image/generate
-Content-Type: application/json
-X-API-Key: SUA_CHAVE
+
+### OpenAI GPT Image 2 — `POST /api/openai/generate`
+
+```jsonc
+{
+  "prompt": "sua descrição",        // obrigatório
+  "aspect_ratio": "1:1",            // 1:1, 3:2, 4:3, 16:9, 2:3, 3:4, 9:16
+  "quality": "high",                // "low" | "medium" | "high" (default high)
+  "prompt_mode": "auto",            // "auto" (reescreve) | "direct" (default auto)
+  "reasoning": "none",              // none, low, medium, high, xhigh, max (default none)
+  "web_search": false,              // grounding por busca (default false)
+  "reference_images": ["data:image/..."]  // até 5, POSICIONAL, sem @tag
+}
 ```
 
-**Parâmetros:**
+Sempre devolve **1 imagem**. Sem campo `model`, sem `upscale`. Saída limitada
+a ~1.57 MP.
 
-| Parâmetro | Tipo | Obrigatório | Default | Descrição |
-|-----------|------|-------------|---------|-----------|
-| `prompt` | string | ✅ | — | Descrição da imagem |
-| `model` | string | ❌ | `imagen4` | Modelo a usar |
-| `count` | integer | ❌ | `1` | Quantidade (1–8) |
-| `aspect_ratio` | string | ❌ | `1:1` | Proporção |
-| `reference_images` | array | ❌ | — | Imagens base64 de referência |
-| `upscale` | array | ❌ | — | `["2K"]`, `["4K"]` ou ambos |
+### Video — `POST /api/video/generate`
 
-**Modelos de imagem disponíveis:**
+```jsonc
+{
+  "prompt": "descrição do movimento",
+  "model": "veo_31_fast",
+  "aspect_ratio": "16:9",           // 16:9 ou 9:16
+  "mode": "text_to_video",          // text_to_video | start_image | start_end_image | components
+  "reference_images": ["data:image/..."],  // obrigatório se mode != text_to_video
+  "resolution": ["720p"],           // 720p | 1080p | 4K (4K exige ULTRA)
+  "voice": "aoede",                 // só no mode components
+  "video_length": 8                 // Veo 4/6/8 (4 e 6 exigem ULTRA); Omni Flash 4/6/8/10
+}
+```
 
-| Modelo | Descrição |
-|--------|-----------|
-| `imagen4` | Google Imagen 4 (text-to-image) |
-| `nano_banana` | Nano Banana |
-| `nano_banana_2` | Nano Banana 2 |
-| `nano_banana_pro` | Nano Banana Pro (requer extensão Chrome) |
+### Grok — `POST /api/grok/generate`
 
-**Aspect ratios:** `1:1`, `16:9`, `9:16`, `4:3`, `3:4`
+```jsonc
+{
+  "prompt": "seu prompt",
+  "mode": "t2i",                    // t2i | i2i | t2v | i2v
+  "aspect_ratio": "9:16",
+  "reference_images": ["data:image/..."],  // obrigatório em i2i/i2v, até 5
+  "video_length": 6,                // 6 | 10 | 15 segundos
+  "resolution": "480p"              // 480p | 720p (só vídeo)
+}
+```
 
-**Reference images:**
+Devolve **um** resultado por requisição (o primeiro gerado).
 
-Para `imagen4` (Whisk), usar formato dict com categoria:
+### Meta AI — `POST /api/meta/generate`
+
+```jsonc
+{
+  "prompt": "seu prompt",
+  "mode": "t2i",                    // t2i | i2i | t2v | i2v
+  "aspect_ratio": "9:16",           // 9:16 | 16:9 | 1:1
+  "resolution": "720p",             // 480p | 720p (só vídeo)
+  "count": 1,                       // 1–4 saídas por prompt
+  "character_image": "data:image/...",  // i2i
+  "scene_image": "data:image/...",      // i2i
+  "style_image": "data:image/...",      // i2i
+  "start_image": "data:image/...",      // i2v (obrigatório)
+  "end_image": "data:image/..."         // i2v (opcional)
+}
+```
+
+Meta usa campos nomeados em vez do array `reference_images`.
+
+---
+
+## Imagens de referência
+
+Formatos aceitos:
+
+- Data URI: `"data:image/png;base64,iVBORw0KGgo..."`
+- Base64 puro: `"iVBORw0KGgo..."`
+- Objeto: `{"data": "...", "name": "arquivo.png", "category": "subject"}`
+
+**Apenas Image e Veo** aceitam `@palavra` no prompt para amarrar imagens
+nomeadas (casamento por substring no nome do arquivo, sem diferenciar
+maiúsculas):
+
 ```json
 {
+  "prompt": "a @red_car next to a @house",
   "reference_images": [
-    {"data": "data:image/png;base64,IMAGEM_BASE64", "category": "subject"}
+    {"data": "data:image/png;base64,...", "name": "red_car.png"},
+    {"data": "data:image/jpeg;base64,...", "name": "house.jpg"}
   ]
 }
 ```
-Categorias: `subject`, `scene`, `style`
 
-Para `nano_banana_pro`, usar formato string direto:
-```json
-{
-  "reference_images": ["data:image/png;base64,IMAGEM_BASE64"]
-}
-```
+### Limites por endpoint
 
-**Resposta (202 Accepted):**
+| Endpoint | Máximo de referências |
+|---|---|
+| `image` | 10 |
+| `video` | 3 |
+| `grok` | 5 |
+| **`openai`** | **5** (posicional, sem `@tag`) |
+| `meta` | usa campos nomeados |
+
+---
+
+## Respostas
+
+### Submissão (202)
+
 ```json
 {
   "task_id": "abc12345",
@@ -91,204 +201,97 @@ Para `nano_banana_pro`, usar formato string direto:
 }
 ```
 
----
+### Status — concluída
 
-### 3. Geração de Vídeo
-
-```
-POST /api/video/generate
-Content-Type: application/json
-X-API-Key: SUA_CHAVE
-```
-
-**Parâmetros:**
-
-| Parâmetro | Tipo | Obrigatório | Default | Descrição |
-|-----------|------|-------------|---------|-----------|
-| `prompt` | string | ✅ | — | Descrição do vídeo |
-| `model` | string | ❌ | `veo_31_fast_relaxed` | Modelo Veo |
-| `mode` | string | ❌ | `text_to_video` | Modo de geração |
-| `aspect_ratio` | string | ❌ | `16:9` | Proporção |
-| `resolution` | array | ❌ | `["720p"]` | Resolução |
-| `reference_images` | array | ❌ | — | Obrigatório para modos não-texto |
-
-**Modelos de vídeo disponíveis:**
-
-| Modelo | Créditos | Nota |
-|--------|----------|------|
-| `veo_31_fast_relaxed` | 0 | Low priority (ULTRA only) |
-| `veo_31_fast` | 10 | Prioridade normal |
-| `veo_31_quality` | 100 | Maior qualidade |
-
-**Modos:**
-
-| Modo | Descrição | Reference images |
-|------|-----------|-----------------|
-| `text_to_video` | Texto → vídeo | Não necessário |
-| `start_image` | Imagem inicial → vídeo | 1 imagem obrigatória |
-| `start_end_image` | Imagem inicial + final → vídeo | 2 imagens obrigatórias |
-| `components` | Componentes → vídeo | Obrigatório |
-
-**Resoluções:** `["720p"]`, `["1080p"]`, `["4K"]`
-
-**Aspect ratios:** `16:9`, `9:16`
-
-**Duração:** Veo sempre gera vídeos de **8 segundos**
-
-**Resposta (202 Accepted):**
-```json
-{
-  "task_id": "def67890",
-  "status": "pending",
-  "message": "Task queued for processing",
-  "poll_url": "/api/status/def67890"
-}
-```
-
-**Exemplo — text-to-video:**
-```json
-{
-  "prompt": "A cat walking on a sunny beach, cinematic lighting",
-  "model": "veo_31_fast",
-  "mode": "text_to_video",
-  "aspect_ratio": "16:9",
-  "resolution": ["720p"]
-}
-```
-
----
-
-### 4. Status da Task
-
-```
-GET /api/status/{task_id}
-X-API-Key: SUA_CHAVE
-```
-
-**Estados possíveis:** `pending` → `running` → `completed` | `failed`
-
-**Resposta (completed):**
 ```json
 {
   "task_id": "abc12345",
+  "type": "image",
   "status": "completed",
-  "results": [
-    {"url": "/api/files/resultado_001.png", "filename": "resultado_001.png"}
-  ]
+  "prompt": "...",
+  "created_at": 1707782400.0,
+  "results": ["http://127.0.0.1:8765/api/files/image_001.png"],
+  "completed_at": 1707782460.0
 }
 ```
 
-**Resposta (failed):**
+### Status — falhou
+
 ```json
 {
   "task_id": "abc12345",
+  "type": "image",
   "status": "failed",
-  "error_code": 0,
-  "error_detail": "No images generated"
+  "error_code": 403,
+  "error": "PERMISSION_DENIED",
+  "error_detail": "403: PERMISSION_DENIED"
+}
+```
+
+### Health
+
+```json
+{
+  "status": "ok",
+  "server": "G-Labs Webhook",
+  "uptime": 123,
+  "tasks_pending": 0,
+  "tasks_running": 1
 }
 ```
 
 ---
 
-### 5. Resultado da Task
+## Códigos de erro
 
-```
-GET /api/result/{task_id}
-X-API-Key: SUA_CHAVE
-```
+| Código | Significado |
+|---|---|
+| `429` | Cota ou rate limit esgotado |
+| `403` | Permissão negada |
+| `400` | Requisição inválida / violação de política |
+| `500` | Erro no servidor upstream |
+| `0` | **Erro de validação/ambiente** |
 
-Retorna dados focados nas URLs dos arquivos de output.
-
----
-
-### 6. Listar Tasks
-
-```
-GET /api/tasks
-X-API-Key: SUA_CHAVE
-```
-
-Retorna as 50 tasks mais recentes, ordenadas por data (mais recente primeiro).
+O `error_code` é evidência muito melhor que o texto do `error`. Ver a
+tradução em [`lib/logger.ts`](../lib/logger.ts) (`explainEngineError`), que
+alimenta a aba `/logs`.
 
 ---
 
-### 7. Download de Arquivo
+## Restrições operacionais
 
-```
-GET /api/files/{filename}
-X-API-Key: SUA_CHAVE
-```
+- Plano **MAX** exigido para o servidor Webhook
+- Bind padrão `127.0.0.1:8765` (só localhost — a VPS chega via Tailscale)
+- Até **10 tarefas simultâneas**; o excedente entra na fila
+- **Image/Video**: exigem conta Google logada e habilitada (Gemini Pro/Ultra)
+- **Grok**: exige conexão Super Grok ativa
+- **Meta AI**: exige conta Meta logada e habilitada
+- **OpenAI**: exige conta ChatGPT logada e habilitada; **máx. 5 threads por conta**
+- Upscale 4K e vídeo 4K exigem ULTRA; 1080p funciona sem
+- Tasks vivem só em memória — somem se o app reiniciar
 
-Retorna o arquivo binário com `Content-Type` apropriado.
-
----
-
-## Padrão de Polling
-
-Tasks são **assíncronas**. Fluxo recomendado:
-
-1. Submeter request de geração → recebe `task_id`
-2. Aguardar 5-30 segundos
-3. Poll `GET /api/status/{task_id}` a cada **5 segundos**
-4. Quando `status: "completed"` → baixar arquivos das URLs em `results`
-
-### Exemplo Python:
-```python
-import httpx
-import time
-
-BASE_URL = "https://joel.tail739437.ts.net"
-API_KEY = "SUA_CHAVE"
-HEADERS = {"X-API-Key": API_KEY, "Content-Type": "application/json"}
-
-# 1. Submit
-resp = httpx.post(f"{BASE_URL}/api/video/generate", headers=HEADERS, json={
-    "prompt": "A cat walking on a sunny beach",
-    "model": "veo_31_fast",
-    "mode": "text_to_video",
-    "aspect_ratio": "16:9",
-    "resolution": ["720p"]
-})
-task_id = resp.json()["task_id"]
-
-# 2. Poll
-while True:
-    time.sleep(5)
-    status_resp = httpx.get(f"{BASE_URL}/api/status/{task_id}", headers=HEADERS)
-    data = status_resp.json()
-
-    if data["status"] == "completed":
-        for result in data["results"]:
-            # Download
-            file_resp = httpx.get(f"{BASE_URL}{result['url']}", headers=HEADERS)
-            with open(result["filename"], "wb") as f:
-                f.write(file_resp.content)
-        break
-    elif data["status"] == "failed":
-        print(f"Erro: {data.get('error_detail')}")
-        break
-```
+> O G-Labs avisa na própria interface: *"Subscription only covers the
+> automation tool. To actually generate images / videos, you still need
+> accounts from the respective platforms (Gemini Pro / Ultra for Google Labs
+> image / video, Super Grok for Grok Video, etc.)."*
 
 ---
 
-## Status Codes HTTP
+## O que este projeto usa
 
-| Código | Descrição |
-|--------|-----------|
-| `200` | Sucesso |
-| `202` | Task aceita/enfileirada |
-| `400` | Request inválido (JSON malformado, campos faltando) |
-| `401` | Autenticação falhou |
-| `404` | Recurso não encontrado |
-| `500` | Erro interno do servidor |
+Implementado em [`lib/engines/glabs.ts`](../lib/engines/glabs.ts):
 
----
+| Engine do app | Endpoint | Parâmetros fixos |
+|---|---|---|
+| `glabs` | `/api/image/generate` | `model: nano_banana_pro`, `aspect_ratio: 16:9` |
+| `gpt-image-2` | `/api/openai/generate` | `quality: high`, `prompt_mode: direct`, `reasoning: medium`, `web_search: false`, `aspect_ratio: 16:9` |
 
-## Notas Importantes
+`prompt_mode: "direct"` é deliberado: no default (`auto`) a OpenAI reescreve o
+prompt, o que desmontaria a estrutura montada em
+[`lib/prompt.ts`](../lib/prompt.ts).
 
-- **nano_banana_pro** requer Chrome aberto com extensão G-Labs conectada ao `labs.google`
-- **imagen4** funciona sem extensão (gera direto)
-- **Veo 3.1** requer Chrome aberto com extensão G-Labs (mesmo que nano_banana_pro)
-- O servidor G-Labs roda **localmente** na máquina, acessível via Tailscale
-- Para `nano_banana_pro` use `aspect_ratio: "16:9"` ou `"9:16"` (não suporta `1:1`, `4:3`, `3:4`)
-- Para `nano_banana_pro` use `reference_images` como array de **strings** (não dict)
+**A ordem das referências é contratual**, não estética: o prompt de remodelar
+instrui o modelo a usar a PRIMEIRA imagem como face e a ÚLTIMA como thumbnail
+a remodelar. Ao cortar para caber no teto da engine, só styles do meio são
+descartados — ver `selectReferences` em
+[`lib/engines/orchestrator.ts`](../lib/engines/orchestrator.ts).
