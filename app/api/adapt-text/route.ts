@@ -12,13 +12,16 @@ const bodySchema = z.object({
   texts: z
     .array(
       z.object({
-        original: z.string().min(1).max(300),
+        // 600 e não 300: a análise às vezes devolve um parágrafo inteiro num
+        // bloco só (uma thumb no estilo "história" passa de 380 caracteres), e
+        // um limite apertado transformava isso num 400 sem explicação.
+        original: z.string().min(1).max(600),
         position: z.string().max(80).optional(),
         style: z.string().max(80).optional(),
       })
     )
     .min(1)
-    .max(20),
+    .max(30),
 });
 
 export async function POST(req: Request) {
@@ -28,8 +31,17 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
+    // "Request inválido" sozinho não diz nada a quem está na tela. O caso real
+    // foi um texto longo demais, e a mensagem genérica mandou procurar em todo
+    // lugar menos no tamanho.
+    const detail = parsed.error.issues
+      .map((i) => `${i.path.join(".") || "corpo"}: ${i.message}`)
+      .join("; ");
+    logger.warn("adapt", `Requisição de adaptação rejeitada: ${detail}`, {
+      detail: { issues: parsed.error.issues },
+    });
     return NextResponse.json(
-      { error: "Request inválido", issues: parsed.error.issues },
+      { error: `Não foi possível adaptar — ${detail}`, issues: parsed.error.issues },
       { status: 400 }
     );
   }

@@ -22,7 +22,8 @@ Extract from the attached image and return ONLY a JSON object with EXACTLY this 
 }
 
 Rules:
-- "detectedText": every readable text block, with its literal text, position, color and style/role.
+- "detectedText": ONE ENTRY PER VISUAL LINE of text, exactly as the line breaks appear in the image. NEVER merge several lines into a single entry, not even when they form one continuous sentence — the creator replaces the text line by line to keep the layout, so a merged block is useless. A thumbnail with 10 lines of story text must return 10 entries, in reading order. A colour change mid-sentence almost always marks a separate line: capture it as its own entry.
+- Each entry carries its literal text, position, colour and style/role.
 - "dominantColors": top 3-5 colors with hex, a short PT-BR name and role.
 - "objects": distinct visual objects/elements (NOT text), short PT-BR descriptions.
 - Copy the original headline text into the suggested* fields, in CAPS.
