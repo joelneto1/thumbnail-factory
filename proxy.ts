@@ -42,8 +42,26 @@ function safeNextPath(raw: string | null): string {
   return raw;
 }
 
+/**
+ * Checagem de FORMATO da chave de API, não de validade.
+ *
+ * A verificação real (existe? está revogada?) exige o banco, e puxar o SQLite
+ * para o bundle do proxy seria caro e frágil. Aqui só se decide "parece uma
+ * chave, deixa seguir" — quem barra de verdade é o `requireSession()` da rota,
+ * que é a camada de autorização de fato.
+ */
+function looksLikeApiKeyHeader(request: NextRequest): boolean {
+  const raw = request.headers.get("x-api-key");
+  return !!raw && /^tf_live_[0-9a-f]{32}$/.test(raw);
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+
+  // Requisição de sistema externo: segue para a rota, que valida a chave.
+  if (pathname.startsWith("/api/") && looksLikeApiKeyHeader(request)) {
+    return NextResponse.next();
+  }
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const session = await verifySessionToken(token);

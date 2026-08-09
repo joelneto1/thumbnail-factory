@@ -14,6 +14,7 @@ const links = [
   { href: "/personas", label: "Personas", pip: undefined as string | undefined },
   { href: "/history", label: "Histórico", pip: undefined as string | undefined },
   { href: "/logs", label: "Logs", pip: undefined as string | undefined },
+  { href: "/api-docs", label: "API", pip: undefined as string | undefined },
   { href: "/settings", label: "Settings", pip: undefined as string | undefined },
 ];
 

@@ -85,7 +85,12 @@ export function getSettingsStatus() {
       "GLABS_BASE_URL",
       DEFAULT_GLABS_BASE_URL
     ),
-    glabsApiKey: classifySource(SETTING_KEYS.GLABS_API_KEY, "GLABS_API_KEY"),
+    glabsApiKey: classifySource(
+      SETTING_KEYS.GLABS_API_KEY,
+      "GLABS_API_KEY",
+      undefined,
+      true
+    ),
     cliProxyBaseUrl: classifySource(
       SETTING_KEYS.CLI_PROXY_BASE_URL,
       "CLI_PROXY_BASE_URL",
@@ -93,7 +98,9 @@ export function getSettingsStatus() {
     ),
     cliProxyApiKey: classifySource(
       SETTING_KEYS.CLI_PROXY_API_KEY,
-      "CLI_PROXY_API_KEY"
+      "CLI_PROXY_API_KEY",
+      undefined,
+      true
     ),
     cliProxyModel: classifySource(
       SETTING_KEYS.CLI_PROXY_MODEL,
@@ -108,26 +115,41 @@ export function getSettingsStatus() {
   };
 }
 
+/**
+ * `secret: true` omite o texto puro do `value`, deixando só o mascarado.
+ *
+ * GET /api/settings devolvia as chaves do G-Labs e do CLI Proxy em texto puro.
+ * Passava despercebido enquanto só a interface consumia a rota; com chaves de
+ * API, uma chave vazada exporia as outras duas. A tela não usa `value` nesses
+ * campos — lê do `masked` —, então omitir não quebra nada.
+ */
 function classifySource(
   dbKey: string,
   envKey: string,
-  defaultValue?: string
+  defaultValue?: string,
+  secret = false
 ): {
   value: string;
   masked: string;
   source: "db" | "env" | "default" | "missing";
 } {
+  const build = (
+    raw: string,
+    source: "db" | "env" | "default"
+  ) => ({
+    value: secret ? "" : raw,
+    masked: source === "default" ? raw : maskSecret(raw),
+    source,
+  });
+
   const fromDb = settingsRepo.get(dbKey);
-  if (fromDb && fromDb.trim()) {
-    return { value: fromDb.trim(), masked: maskSecret(fromDb.trim()), source: "db" };
-  }
+  if (fromDb && fromDb.trim()) return build(fromDb.trim(), "db");
+
   const fromEnv = process.env[envKey];
-  if (fromEnv && fromEnv.trim()) {
-    return { value: fromEnv.trim(), masked: maskSecret(fromEnv.trim()), source: "env" };
-  }
-  if (defaultValue) {
-    return { value: defaultValue, masked: defaultValue, source: "default" };
-  }
+  if (fromEnv && fromEnv.trim()) return build(fromEnv.trim(), "env");
+
+  if (defaultValue) return build(defaultValue, "default");
+
   return { value: "", masked: "", source: "missing" };
 }
 

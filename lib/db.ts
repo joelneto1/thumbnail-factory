@@ -101,6 +101,20 @@ export function getDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts DESC);
     CREATE INDEX IF NOT EXISTS idx_logs_level_ts ON logs(level, ts DESC);
     CREATE INDEX IF NOT EXISTS idx_logs_gen ON logs(generation_id);
+
+    -- Chaves de API para consumo externo. Guarda o HASH, nunca a chave: quem
+    -- ler o banco não consegue usar nenhuma delas.
+    CREATE TABLE IF NOT EXISTS api_keys (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      prefix TEXT NOT NULL,
+      key_hash TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL,
+      last_used_at INTEGER,
+      revoked_at INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
   `);
 
   // Migrações idempotentes — adicionam colunas se ainda não existem.
@@ -729,6 +743,93 @@ export const logsRepo = {
 
   clear(): void {
     getDb().prepare("DELETE FROM logs").run();
+  },
+};
+
+// ─── Chaves de API ────────────────────────────────────────────────────
+
+export interface ApiKey {
+  id: string;
+  name: string;
+  /** Início da chave, para identificar visualmente sem expor o segredo. */
+  prefix: string;
+  createdAt: number;
+  lastUsedAt: number | null;
+  revokedAt: number | null;
+}
+
+interface ApiKeyRow {
+  id: string;
+  name: string;
+  prefix: string;
+  key_hash: string;
+  created_at: number;
+  last_used_at: number | null;
+  revoked_at: number | null;
+}
+
+function mapApiKey(r: ApiKeyRow): ApiKey {
+  return {
+    id: r.id,
+    name: r.name,
+    prefix: r.prefix,
+    createdAt: r.created_at,
+    lastUsedAt: r.last_used_at,
+    revokedAt: r.revoked_at,
+  };
+}
+
+export const apiKeysRepo = {
+  create(entry: {
+    id: string;
+    name: string;
+    prefix: string;
+    keyHash: string;
+  }): ApiKey {
+    getDb()
+      .prepare(
+        `INSERT INTO api_keys (id, name, prefix, key_hash, created_at)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+      .run(entry.id, entry.name, entry.prefix, entry.keyHash, Date.now());
+    return this.get(entry.id)!;
+  },
+
+  get(id: string): ApiKey | null {
+    const row = getDb()
+      .prepare("SELECT * FROM api_keys WHERE id = ?")
+      .get(id) as ApiKeyRow | undefined;
+    return row ? mapApiKey(row) : null;
+  },
+
+  list(): ApiKey[] {
+    return (
+      getDb()
+        .prepare("SELECT * FROM api_keys ORDER BY created_at DESC")
+        .all() as ApiKeyRow[]
+    ).map(mapApiKey);
+  },
+
+  /** Busca pelo hash. Só devolve chave ativa — revogada não autentica. */
+  findActiveByHash(keyHash: string): ApiKey | null {
+    const row = getDb()
+      .prepare("SELECT * FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL")
+      .get(keyHash) as ApiKeyRow | undefined;
+    return row ? mapApiKey(row) : null;
+  },
+
+  touchLastUsed(id: string): void {
+    getDb()
+      .prepare("UPDATE api_keys SET last_used_at = ? WHERE id = ?")
+      .run(Date.now(), id);
+  },
+
+  /** Revogação é marcação, não exclusão: preserva o rastro de quem usou o quê. */
+  revoke(id: string): boolean {
+    const info = getDb()
+      .prepare("UPDATE api_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
+      .run(Date.now(), id);
+    return info.changes > 0;
   },
 };
 
