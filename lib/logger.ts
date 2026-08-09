@@ -99,11 +99,15 @@ export const logger = {
 /**
  * Traduz o error_code do G-Labs para uma dica acionável.
  *
- * A mensagem que o G-Labs devolve no code 0 é
+ * A mensagem que o G-Labs devolve no code 0 do canal OpenAI é
  * "Invalid request. Check the prompt and reference images (format/size)",
- * que aponta para o lugar errado: o code 0 é erro de validação/ambiente, e no
- * canal OpenAI significa quase sempre conta ChatGPT ausente na extensão.
- * Perseguir prompt e imagem nesse caso é perder tempo.
+ * que aponta para o lugar errado. Ela é o balde `oa_msg_bad_request` do
+ * G-Labs; conteúdo e rate limit têm mensagens próprias (`oa_msg_moderation`,
+ * `oa_msg_rate_limited`), então nenhum dos dois é a causa quando ela aparece.
+ *
+ * A causa observada foi plano: o G-Labs exige ChatGPT Plus/MAX para o GPT
+ * Image 2 ("GPT Image 2 is only available for PLUS/MAX plans!"), e conta no
+ * tier Free falha aqui mesmo estando logada, habilitada e com status válido.
  */
 export function explainEngineError(
   errorCode: number | null | undefined,
@@ -113,11 +117,11 @@ export function explainEngineError(
   switch (errorCode) {
     case 0:
       return isGpt
-        ? "Erro de validação/ambiente. Quase sempre: nenhuma conta ChatGPT logada e habilitada na extensão do G-Labs. Confira a extensão antes de mexer no prompt — a mensagem do G-Labs cita prompt/imagens, mas o código 0 não é sobre isso."
+        ? "Erro de validação/ambiente — NÃO é o prompt nem as imagens, apesar do que a mensagem do G-Labs diz. Em ordem de probabilidade: (1) a conta ChatGPT está no plano Free e o GPT Image 2 exige Plus/MAX; (2) nenhuma conta ChatGPT habilitada na extensão; (3) a conta não tem chatgpt_account_id. Confira o tier da conta na aba OpenAI do G-Labs."
         : "Erro de validação/ambiente no G-Labs. Confira se a conta Google está logada e habilitada na extensão.";
     case 429:
       return isGpt
-        ? "Cota ou limite de threads da conta ChatGPT esgotado (máx. 5 simultâneas por conta)."
+        ? "Cota ou limite de threads da conta ChatGPT esgotado (máx. 5 simultâneas por conta). O G-Labs tenta rotacionar para outra conta antes de desistir."
         : "Cota diária da conta Google esgotada.";
     case 403:
       return "Permissão negada pela conta conectada na extensão.";

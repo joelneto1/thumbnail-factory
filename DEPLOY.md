@@ -104,10 +104,15 @@ retornar `{"glabs":"up"|"down", "claude":"configured", ...}`.
   Chrome + extensão G-Labs abertos localmente e o túnel Tailscale de pé. Se cair,
   `/api/health` mostra `glabs:down` e a geração falha (sem fallback — o Claude
   não gera imagem). É o comportamento esperado até o RunPod entrar.
-- **GPT Image 2 exige conta ChatGPT logada** na extensão do G-Labs, além do que
-  o Nano Banana já exige (conta Google). Se ela não estiver logada, a geração
-  falha só nessa engine — o `/api/health` continua `glabs:up`, porque o servidor
-  do G-Labs está de pé; quem está fora é a conta.
+- **GPT Image 2 exige conta ChatGPT em plano pago** (Plus/MAX) logada na
+  extensão do G-Labs, além do que o Nano Banana já exige (conta Google). Conta
+  no tier **Free falha** mesmo estando logada, habilitada e com status válido —
+  o G-Labs trava o recurso por plano ("GPT Image 2 is only available for
+  PLUS/MAX plans"). O sintoma é traiçoeiro: a mensagem devolvida é *"Invalid
+  request. Check the prompt and reference images (format/size)"*, que manda
+  procurar no lugar errado. O `/api/health` continua `glabs:up`, porque o
+  servidor do G-Labs está de pé; quem está fora é o plano da conta.
+  O tier de cada conta fica em `%APPDATA%/G-Labs Automation/openai_accounts.json`.
 - **GPT Image 2 aceita no máximo 5 referências** (contra 10 do Nano Banana). Se a
   persona tiver styles demais, o app corta os styles excedentes e avisa na tela —
   a face e a thumbnail do concorrente nunca são descartadas, porque o prompt
