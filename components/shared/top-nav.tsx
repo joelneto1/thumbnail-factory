@@ -30,8 +30,9 @@ export function TopNav() {
     window.location.assign("/login");
   }
 
-  // A tela de login não tem nav — nem faz sentido, nem há sessão pra mostrar.
-  if (pathname === "/login") return null;
+  // Login não tem nav (nem faz sentido, nem há sessão), e a versão de
+  // impressão precisa sair limpa no PDF.
+  if (pathname === "/login" || pathname === "/api-docs/print") return null;
 
   return (
     <header

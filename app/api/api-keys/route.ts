@@ -3,7 +3,7 @@ import { z } from "zod";
 import { nanoid } from "nanoid";
 
 import { apiKeysRepo } from "@/lib/db";
-import { generateApiKey } from "@/lib/auth/api-key";
+import { generateApiKey, encryptApiKey } from "@/lib/auth/api-key";
 import { requireSession, getPrincipal } from "@/lib/auth/guard";
 import { logger } from "@/lib/logger";
 import { logged } from "@/lib/route-logger";
@@ -43,6 +43,9 @@ export const POST = logged("api-keys", "POST /api-keys", async function (req: Re
     name: parsed.data.name.trim(),
     prefix,
     keyHash: hash,
+    // Cifrada, para o usuário poder copiar de novo sob sessão. Sem
+    // AUTH_SECRET não há como cifrar, e a chave fica só no hash.
+    keyCipher: encryptApiKey(plaintext),
   });
 
   const principal = await getPrincipal();

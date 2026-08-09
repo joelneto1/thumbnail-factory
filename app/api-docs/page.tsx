@@ -12,6 +12,10 @@ import {
   AlertTriangle,
   Terminal,
   ChevronRight,
+  Eye,
+  FileText,
+  Download,
+  Loader2,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -19,6 +23,7 @@ import { formatDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { API_GROUPS, TOTAL_ENDPOINTS, type Endpoint } from "@/lib/api-catalog";
+import { buildApiMarkdown } from "@/lib/api-catalog-markdown";
 
 interface ApiKey {
   id: string;
@@ -174,6 +179,47 @@ export default function ApiDocsPage() {
   const [name, setName] = React.useState("");
   const [novaChave, setNovaChave] = React.useState<string | null>(null);
   const [revogar, setRevogar] = React.useState<ApiKey | null>(null);
+  const [mdCopiado, setMdCopiado] = React.useState(false);
+  /** Chaves reveladas nesta sessão de tela, por id. */
+  const [reveladas, setReveladas] = React.useState<Record<string, string>>({});
+  const [revelando, setRevelando] = React.useState<string | null>(null);
+
+  async function copiarMarkdown() {
+    try {
+      await navigator.clipboard.writeText(buildApiMarkdown(window.location.origin));
+      setMdCopiado(true);
+      setTimeout(() => setMdCopiado(false), 2000);
+      toast.success("Documentação copiada em Markdown");
+    } catch {
+      toast.error("O navegador bloqueou a cópia — use o botão de baixar.");
+    }
+  }
+
+  function baixarMarkdown() {
+    const blob = new Blob([buildApiMarkdown(window.location.origin)], {
+      type: "text/markdown;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "thumbfast-api.md";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function revelar(k: ApiKey) {
+    setRevelando(k.id);
+    try {
+      const r = await fetch(`/api/api-keys/${k.id}/reveal`);
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(j?.error ?? "Não foi possível revelar a chave");
+      setReveladas((prev) => ({ ...prev, [k.id]: j.plaintext }));
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRevelando(null);
+    }
+  }
 
   const { data, isLoading } = useQuery<{ keys: ApiKey[] }>({
     queryKey: ["api-keys"],
@@ -221,12 +267,31 @@ export default function ApiDocsPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1000px] px-6 py-8">
-      <header className="mb-6 flex items-center gap-2.5">
+      <header className="mb-6 flex flex-wrap items-center gap-2.5">
         <Terminal className="size-5 text-[var(--accent)]" />
         <h1 className="text-[22px] font-semibold text-[var(--ink)]">API</h1>
         <span className="font-mono text-[11px] text-[var(--ink-4)]">
           {TOTAL_ENDPOINTS} endpoints
         </span>
+
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={copiarMarkdown}>
+            {mdCopiado ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+            {mdCopiado ? "copiado" : "Copiar .md"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={baixarMarkdown}>
+            <Download className="size-3.5" />
+            Baixar .md
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.open("/api-docs/print", "_blank", "noopener")}
+          >
+            <FileText className="size-3.5" />
+            Gerar PDF
+          </Button>
+        </div>
       </header>
 
       {/* ─── Autenticação ─────────────────────────────────────────── */}
@@ -331,12 +396,38 @@ export default function ApiDocsPage() {
                     )}
                   </p>
                   <p className="font-mono text-[10.5px] text-[var(--ink-4)]">
-                    {k.prefix}…&nbsp; criada {formatDate(k.createdAt)}
+                    {/* Revelada: mostra mascarada, mas o botão copia inteira. */}
+                    {reveladas[k.id]
+                      ? `${reveladas[k.id].slice(0, 14)}${"•".repeat(12)}${reveladas[
+                          k.id
+                        ].slice(-4)}`
+                      : `${k.prefix}…`}
+                    &nbsp; criada {formatDate(k.createdAt)}
                     {k.lastUsedAt
                       ? ` · último uso ${formatDate(k.lastUsedAt)}`
                       : " · nunca usada"}
                   </p>
                 </div>
+
+                {!k.revokedAt &&
+                  (reveladas[k.id] ? (
+                    <CopyButton text={reveladas[k.id]} label="copiar chave" />
+                  ) : (
+                    <button
+                      onClick={() => revelar(k)}
+                      disabled={revelando === k.id}
+                      title="Mostrar para copiar de novo"
+                      className="flex shrink-0 items-center gap-1 rounded-md border border-[var(--line-2)] bg-[var(--bg-3)] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--ink-3)] transition-colors hover:border-[var(--line-3)] hover:text-[var(--ink)] disabled:opacity-50"
+                    >
+                      {revelando === k.id ? (
+                        <Loader2 className="size-3 animate-spin" />
+                      ) : (
+                        <Eye className="size-3" />
+                      )}
+                      revelar
+                    </button>
+                  ))}
+
                 {!k.revokedAt && (
                   <button
                     onClick={() => setRevogar(k)}

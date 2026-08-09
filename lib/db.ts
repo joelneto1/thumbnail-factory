@@ -109,6 +109,10 @@ export function getDb(): Database.Database {
       name TEXT NOT NULL,
       prefix TEXT NOT NULL,
       key_hash TEXT NOT NULL UNIQUE,
+      -- Chave cifrada (AES-256-GCM com segredo derivado de AUTH_SECRET), para
+      -- o usuário poder copiá-la de novo. O hash acima continua sendo o que
+      -- autentica; este campo existe só para exibição sob sessão.
+      key_cipher TEXT,
       created_at INTEGER NOT NULL,
       last_used_at INTEGER,
       revoked_at INTEGER
@@ -124,6 +128,17 @@ export function getDb(): Database.Database {
 }
 
 function applyMigrations(db: Database.Database): void {
+  // api_keys.key_cipher chegou depois: bancos criados antes não têm a coluna.
+  const apiKeyCols = db.prepare("PRAGMA table_info(api_keys)").all() as Array<{
+    name: string;
+  }>;
+  if (
+    apiKeyCols.length > 0 &&
+    !apiKeyCols.some((c) => c.name === "key_cipher")
+  ) {
+    db.exec("ALTER TABLE api_keys ADD COLUMN key_cipher TEXT");
+  }
+
   const cols = db.prepare("PRAGMA table_info(generations)").all() as Array<{
     name: string;
     notnull: number;
@@ -763,6 +778,7 @@ interface ApiKeyRow {
   name: string;
   prefix: string;
   key_hash: string;
+  key_cipher: string | null;
   created_at: number;
   last_used_at: number | null;
   revoked_at: number | null;
@@ -785,14 +801,30 @@ export const apiKeysRepo = {
     name: string;
     prefix: string;
     keyHash: string;
+    keyCipher: string | null;
   }): ApiKey {
     getDb()
       .prepare(
-        `INSERT INTO api_keys (id, name, prefix, key_hash, created_at)
-         VALUES (?, ?, ?, ?, ?)`
+        `INSERT INTO api_keys (id, name, prefix, key_hash, key_cipher, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
       )
-      .run(entry.id, entry.name, entry.prefix, entry.keyHash, Date.now());
+      .run(
+        entry.id,
+        entry.name,
+        entry.prefix,
+        entry.keyHash,
+        entry.keyCipher,
+        Date.now()
+      );
     return this.get(entry.id)!;
+  },
+
+  /** Só para revelar sob sessão — nunca sai numa listagem. */
+  getCipher(id: string): string | null {
+    const row = getDb()
+      .prepare("SELECT key_cipher FROM api_keys WHERE id = ?")
+      .get(id) as { key_cipher: string | null } | undefined;
+    return row?.key_cipher ?? null;
   },
 
   get(id: string): ApiKey | null {
