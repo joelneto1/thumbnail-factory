@@ -7,11 +7,19 @@ import { Languages, Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TextSwap } from "@/lib/types";
 
-/** Idiomas com atalho direto. Qualquer outro entra por "Outro". */
+/**
+ * Idiomas com atalho direto. A lista é só conveniência — o campo "Outro"
+ * aceita qualquer idioma, inclusive variantes regionais ("espanhol rioplatense",
+ * "inglês britânico") e crioulos ("nigerian pidgin").
+ *
+ * Os `value` são deliberadamente específicos, não genéricos: "Spanish" puxa
+ * para o espanhol da Espanha, e "Latin American Spanish" é o que serve ao
+ * público da região.
+ */
 const LANGUAGES: Array<{ label: string; value: string }> = [
   { label: "PT-BR", value: "Brazilian Portuguese" },
   { label: "Inglês", value: "English (US)" },
-  { label: "Espanhol", value: "Spanish" },
+  { label: "Espanhol Latino", value: "Latin American Spanish" },
   { label: "Italiano", value: "Italian" },
   { label: "Francês", value: "French" },
   { label: "Alemão", value: "German" },

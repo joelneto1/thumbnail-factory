@@ -250,6 +250,124 @@ Result must read clearly at 320x180 on a phone. NO watermarks, NO logos, NO bran
 
 ---
 
+## Etapa opcional: adaptar os textos para outro idioma
+
+Roda entre a análise e a geração, quando se quer a thumbnail em outro idioma.
+Não é tradução — é reescrita nativa.
+
+### System prompt
+
+```
+You are a native YouTube thumbnail copywriter for the target language and country — not a translator. You write the hook the way a local creator in that country would have written it from scratch, using the slang, idioms and everyday references that actually circulate there. Word-by-word translation is a failure, not a fallback. You always return valid, minified JSON and nothing else.
+```
+
+### Blocos do user prompt
+
+Cada item entra numerado, com posição, papel e **orçamento de caracteres**:
+
+```
+1. "STATE INSPECTORS WALKED INTO MY COFFEE SHOP"  [top-left, main-headline]  — MAX 49 characters
+```
+
+Orçamento: `max(n + 3, ceil(n * 1.15))`. Instrução qualitativa ("mantenha
+próximo") é cumprida mal; número explícito por item funciona.
+
+Depois, na ordem:
+
+```
+GOLDEN RULE — NEVER TRANSLATE WORD BY WORD:
+Direct, mechanical translation is forbidden. Do not map English words onto {IDIOMA} words. Instead, ask what a native {IDIOMA} creator would have written to provoke the same reaction, and write THAT. If a native reader could tell the text was translated, you failed.
+
+USE NATIVE IDIOM AND SLANG:
+- Replace generic verbs and phrases with the vivid, colloquial expressions that circulate in everyday {IDIOMA} — the ones locals actually say, not textbook equivalents.
+- Prefer a well-known local idiom over a literal phrase, whenever it carries the same drama.
+- Localise references so they feel domestic: currency, institutions, units, everyday objects. Nothing should read as imported.
+
+Worked example (English → French), showing the standard expected:
+
+  Original:  "State inspectors walked into my coffee shop mid-rush"
+  BAD  (literal):  "LES INSPECTEURS DE L'ÉTAT SONT ENTRÉS DANS MON CAFÉ"
+  GOOD (native):   "LES INSPECTEURS ONT DÉBARQUÉ EN PLEIN COUP DE FEU"
+
+Why the good one works: "ont débarqué" is how a French speaker says someone showed up unannounced, and "en plein coup de feu" is the standard restaurant-trade expression for the peak rush. Neither is a translation of the English words — both are what a French creator would have typed. Apply this same standard to {IDIOMA}.
+
+KEEP THE SET COHERENT:
+- The items share one image and often form a sentence that breaks across lines. Read them in order and make the continuation work grammatically from one line to the next.
+- Preserve each item's role: a main-headline stays punchy, a small-caption stays secondary, a banner stays a label.
+- Avoid repeating the same word across items.
+
+HARD CONSTRAINT — LENGTH:
+Each item above has a "MAX N characters" budget. Every adapted text MUST be at or under its budget — count the characters before answering. Shorter is always better.
+
+PUNCTUATION — KEEP IT CLEAN FOR A THUMBNAIL:
+- Use ONLY straight quotes (") when a quote is needed, and drop them entirely when the line reads fine without. NEVER use locale quote marks such as « », „ ", ‹ ›, 「 」, or curly quotes.
+- Keep punctuation that carries emphasis (?, !, …). Drop decorative punctuation.
+- No emoji, no markdown, no bold markers.
+
+OTHER RULES:
+- Return every item in UPPERCASE. Uppercase it in {IDIOMA}'s own rules, keeping accents (É, À, Ü, Ñ).
+- Keep numbers as digits, and keep proper names and brand names unchanged.
+```
+
+Saída: `{"adaptations":[{"original":"...","adapted":"..."}]}`, na mesma ordem
+da entrada.
+
+### Parâmetros
+
+`temperature 0.7` (transcriação exige escolher entre formulações),
+reasoning `medium`, e `maxTokens = min(8000, 1500 + n * 300)` — teto fixo
+trunca o JSON em thumbnails com muitas linhas.
+
+### Duas coisas que o prompt sozinho não garante
+
+**Sanitize a pontuação no código.** Mesmo proibido, o modelo às vezes devolve
+guillemets. Normalize `« » „ " ‹ › 「 」` e aspas curvas para `"` reto antes de
+usar.
+
+**Case a resposta por posição, não pelo campo `original` devolvido.** O modelo
+pode alterar levemente o texto original ao repeti-lo. Use sempre o original que
+VOCÊ enviou.
+
+### Resultado real deste prompt
+
+Mesma frase, três idiomas:
+
+| | Adaptação |
+|---|---|
+| Original | STATE INSPECTORS WALKED INTO MY COFFEE SHOP MID-RUSH |
+| Francês | LES INSPECTEURS ONT DÉBARQUÉ EN PLEIN COUP DE FEU |
+| Alemão | KONTROLLEURE PLATZTEN MITTEN IM ANSTURM IN MEIN CAFÉ |
+| Espanhol LATAM | SE METIERON LOS INSPECTORES A MI CAFÉ EN PLENA HORA PICO |
+| Japonês | 満席のカフェに保健所がいきなり乗り込んできた |
+| Turco | YOĞUN SAATTE DENETÇİLER KAFEME DALDI |
+| Nigerian Pidgin | NAFDAC PIPO BURST MY COFFEE SHOP FOR RUSH HOUR |
+
+Repare que a **instituição** acompanha o país: 保健所 é a vigilância sanitária
+japonesa e NAFDAC é a agência reguladora nigeriana real — nenhuma das duas é
+tradução de "state inspectors".
+
+O mesmo vale para moeda. `"I PULLED OUT ONE DOLLAR"` virou `1 EURO` em francês
+e alemão, `UN PESO` em espanhol, `1円` em japonês, `1 LİRA` em turco e
+`1 NAIRA` em pidgin nigeriano.
+
+E a gíria regional aparece onde tradução nenhuma chegaria: `"YOU'RE DONE HERE"`
+virou `AQUÍ YA VALISTE` em espanhol latino e `YOU DON FINISH HERE!` em pidgin.
+
+### Funciona com qualquer idioma
+
+Nada no prompt é específico dos idiomas oferecidos como atalho: o nome do
+idioma é interpolado e o modelo faz o resto. Variantes regionais ("espanhol
+rioplatense", "inglês britânico"), crioulos e línguas de escrita não-latina
+funcionam igual. Os exemplos de japonês, turco e pidgin acima vieram todos por
+texto livre.
+
+Nota para escrita não-latina: a regra de CAIXA ALTA vira inócua em japonês,
+chinês e árabe, que não têm distinção de caixa — o texto volta correto do
+mesmo jeito. E o orçamento de caracteres fica folgado nesses idiomas, já que
+eles são mais compactos que o inglês.
+
+---
+
 ## Modo alternativo: gerar do zero
 
 Quando não há thumbnail de referência, o prompt **não usa template nenhum**.
