@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { generationsRepo, variantsRepo, personasRepo } from "@/lib/db";
 import { pollPendingVariants } from "@/lib/engines/orchestrator";
 import { requireSession } from "@/lib/auth/guard";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,7 @@ interface Params {
   params: Promise<{ id: string }>;
 }
 
-export async function GET(_req: Request, { params }: Params) {
+export const GET = logged("status", "GET /status/[id]", async function (_req: Request, { params }: Params) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -32,9 +33,9 @@ export async function GET(_req: Request, { params }: Params) {
     variants,
     persona,
   });
-}
+});
 
-export async function DELETE(_req: Request, { params }: Params) {
+export const DELETE = logged("status", "DELETE /status/[id]", async function (_req: Request, { params }: Params) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -45,4 +46,4 @@ export async function DELETE(_req: Request, { params }: Params) {
   }
   generationsRepo.delete(id);
   return NextResponse.json({ ok: true });
-}
+});

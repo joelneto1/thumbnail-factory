@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 
 import { resolveDataPath, detectMime } from "@/lib/files";
 import { requireSession } from "@/lib/auth/guard";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,7 @@ interface Params {
   params: Promise<{ path: string[] }>;
 }
 
-export async function GET(_req: Request, { params }: Params) {
+export const GET = logged("files", "GET /files/[...path]", async function (_req: Request, { params }: Params) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -40,4 +41,4 @@ export async function GET(_req: Request, { params }: Params) {
       "Cache-Control": "public, max-age=300, must-revalidate",
     },
   });
-}
+});

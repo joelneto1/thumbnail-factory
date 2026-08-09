@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { generationsRepo, variantsRepo, recomputeGenerationStatus } from "@/lib/db";
 import { deleteIfExists, resolveDataPath } from "@/lib/files";
 import { requireSession } from "@/lib/auth/guard";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,7 @@ interface Params {
   params: Promise<{ id: string }>;
 }
 
-export async function DELETE(_req: Request, { params }: Params) {
+export const DELETE = logged("variants", "DELETE /variants/[id]", async function (_req: Request, { params }: Params) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -40,4 +41,4 @@ export async function DELETE(_req: Request, { params }: Params) {
 
   recomputeGenerationStatus(variant.generationId);
   return NextResponse.json({ ok: true, generationDeleted: false });
-}
+});

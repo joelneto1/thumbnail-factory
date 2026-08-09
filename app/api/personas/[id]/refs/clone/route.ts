@@ -13,6 +13,7 @@ import {
   writeBuffer,
 } from "@/lib/files";
 import { requireSession } from "@/lib/auth/guard";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ interface Params {
  * Copia uma imagem que já existe em data/ para a pasta da persona como
  * uma nova style ref. Usado pra "Use as style ref" no workbench.
  */
-export async function POST(req: Request, { params }: Params) {
+export const POST = logged("personas", "POST /personas/[id]/refs/clone", async function (req: Request, { params }: Params) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -76,4 +77,4 @@ export async function POST(req: Request, { params }: Params) {
     persona: personasRepo.get(id),
     addedPath: rel,
   });
-}
+});

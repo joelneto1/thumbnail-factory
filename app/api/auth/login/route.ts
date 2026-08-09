@@ -15,6 +15,7 @@ import {
   recordFailure,
 } from "@/lib/auth/rate-limit";
 import { logger } from "@/lib/logger";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ const bodySchema = z.object({
 const DUMMY_HASH =
   "scrypt:00000000000000000000000000000000:" + "0".repeat(128);
 
-export async function POST(req: Request) {
+export const POST = logged("auth", "POST /auth/login", async function (req: Request) {
   if (!isAuthConfigured()) {
     return NextResponse.json(
       {
@@ -100,4 +101,4 @@ export async function POST(req: Request) {
   );
   response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
   return response;
-}
+});

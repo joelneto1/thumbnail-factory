@@ -4,10 +4,11 @@ import { checkGlabsHealth } from "@/lib/engines/glabs";
 import { callClaude, isClaudeConfigured } from "@/lib/engines/claude";
 import { getGlabsBaseUrl, getCliProxyBaseUrl, getCliProxyModel } from "@/lib/settings";
 import { requireSession } from "@/lib/auth/guard";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: Request) {
+export const POST = logged("settings", "POST /settings/test", async function (req: Request) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -66,4 +67,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ error: "Engine desconhecida" }, { status: 400 });
-}
+});

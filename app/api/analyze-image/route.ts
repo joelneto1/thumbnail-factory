@@ -4,6 +4,7 @@ import { z } from "zod";
 import { analyzeImage } from "@/lib/engines/claude-analyze";
 import { resolveDataPath, readImageAsDataUrl } from "@/lib/files";
 import { requireSession } from "@/lib/auth/guard";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -12,7 +13,7 @@ const schema = z.object({
   imagePath: z.string().min(1),
 });
 
-export async function POST(req: Request) {
+export const POST = logged("analyze-image", "POST /analyze-image", async function (req: Request) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -44,4 +45,4 @@ export async function POST(req: Request) {
       { status: 502 }
     );
   }
-}
+});

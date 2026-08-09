@@ -13,6 +13,8 @@ import {
   deleteIfExists,
 } from "@/lib/files";
 import { requireSession } from "@/lib/auth/guard";
+import { logger } from "@/lib/logger";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +29,7 @@ interface Params {
  * - face: substitui face_path (e remove arquivo antigo)
  * - style: append em style_paths
  */
-export async function POST(req: Request, { params }: Params) {
+export const POST = logged("personas", "POST /personas/[id]/refs", async function (req: Request, { params }: Params) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -46,18 +48,36 @@ export async function POST(req: Request, { params }: Params) {
     );
   }
 
-  const form = await req.formData().catch(() => null);
+  // O tamanho declarado é lido ANTES de tentar parsear: quando o corpo passa do
+  // limite bufferizado pelo proxy, ele chega truncado e o formData() só acusa
+  // "faltou o campo file" — mensagem que manda procurar no lugar errado.
+  const declaredSize = Number(req.headers.get("content-length") ?? 0);
+
+  const form = await req.formData().catch((err) => {
+    logger.error("upload", `form-data ilegível (persona ${id})`, {
+      detail: { kind, contentLength: declaredSize, erro: err },
+    });
+    return null;
+  });
   const file = form?.get("file");
   if (!(file instanceof File)) {
-    return NextResponse.json(
-      { error: "Faltou o campo 'file' no form-data" },
-      { status: 400 }
-    );
+    const mb = (declaredSize / 1048576).toFixed(1);
+    const suspeitaTamanho = declaredSize > 10 * 1048576;
+    const msg = suspeitaTamanho
+      ? `A imagem (${mb} MB) não chegou inteira ao servidor. Use um arquivo menor ou reduza a resolução.`
+      : "Faltou o campo 'file' no form-data";
+    logger.error("upload", `Upload de ${kind} falhou (persona ${id}): ${msg}`, {
+      detail: { kind, personaId: id, contentLength: declaredSize, mb },
+    });
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 
   const buf = Buffer.from(await file.arrayBuffer());
   const mime = detectMime(buf);
   if (!mime.startsWith("image/")) {
+    logger.warn("upload", `Arquivo rejeitado (não é imagem): ${mime}`, {
+      detail: { kind, personaId: id, mime, bytes: buf.length },
+    });
     return NextResponse.json(
       { error: "Arquivo precisa ser PNG, JPG ou WebP" },
       { status: 400 }
@@ -87,13 +107,13 @@ export async function POST(req: Request, { params }: Params) {
 
   const updated = personasRepo.get(id);
   return NextResponse.json({ persona: updated, path: rel });
-}
+});
 
 /**
  * DELETE /api/personas/[id]/refs?path=relative/path/to/file
  * Remove um style ref específico (ou face — limpa o slot).
  */
-export async function DELETE(req: Request, { params }: Params) {
+export const DELETE = logged("personas", "DELETE /personas/[id]/refs", async function (req: Request, { params }: Params) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -126,4 +146,4 @@ export async function DELETE(req: Request, { params }: Params) {
   }
 
   return NextResponse.json({ persona: personasRepo.get(id) });
-}
+});

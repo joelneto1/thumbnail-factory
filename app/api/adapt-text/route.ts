@@ -4,6 +4,7 @@ import { z } from "zod";
 import { adaptTexts } from "@/lib/engines/claude-adapt";
 import { requireSession } from "@/lib/auth/guard";
 import { logger } from "@/lib/logger";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ const bodySchema = z.object({
     .max(30),
 });
 
-export async function POST(req: Request) {
+export const POST = logged("adapt-text", "POST /adapt-text", async function (req: Request) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -73,4 +74,4 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ error: msg }, { status: 502 });
   }
-}
+});

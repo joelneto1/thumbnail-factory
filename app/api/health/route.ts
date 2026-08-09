@@ -4,6 +4,7 @@ import { isClaudeConfigured } from "@/lib/engines/claude";
 import { getGlabsBaseUrl } from "@/lib/settings";
 import { getSession } from "@/lib/auth/guard";
 import type { HealthStatus } from "@/lib/types";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
  * cookie nenhum. Por isso o detalhe só sai para quem tem sessão — sem isso,
  * qualquer um na internet leria o hostname Tailscale em `glabsBaseUrl`.
  */
-export async function GET() {
+export const GET = logged("health", "GET /health", async function () {
   const session = await getSession();
 
   if (!session) {
@@ -32,4 +33,4 @@ export async function GET() {
   return NextResponse.json(payload, {
     headers: { "Cache-Control": "no-store" },
   });
-}
+});

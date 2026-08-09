@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 
 import { generationsRepo, variantsRepo, personasRepo } from "@/lib/db";
 import { requireSession } from "@/lib/auth/guard";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
+export const GET = logged("history", "GET /history", async function (req: Request) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -39,4 +40,4 @@ export async function GET(req: Request) {
       : null;
 
   return NextResponse.json({ items: enriched, nextCursor });
-}
+});

@@ -5,6 +5,7 @@ import { personasRepo } from "@/lib/db";
 import { PERSONAS_DIR, deleteIfExists } from "@/lib/files";
 import { updatePersonaSchema } from "@/lib/schema";
 import { requireSession } from "@/lib/auth/guard";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ interface Params {
   params: Promise<{ id: string }>;
 }
 
-export async function GET(_req: Request, { params }: Params) {
+export const GET = logged("personas", "GET /personas/[id]", async function (_req: Request, { params }: Params) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -22,9 +23,9 @@ export async function GET(_req: Request, { params }: Params) {
     return NextResponse.json({ error: "Persona não encontrada" }, { status: 404 });
   }
   return NextResponse.json({ persona });
-}
+});
 
-export async function PATCH(req: Request, { params }: Params) {
+export const PATCH = logged("personas", "PATCH /personas/[id]", async function (req: Request, { params }: Params) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -42,9 +43,9 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Persona não encontrada" }, { status: 404 });
   }
   return NextResponse.json({ persona: updated });
-}
+});
 
-export async function DELETE(_req: Request, { params }: Params) {
+export const DELETE = logged("personas", "DELETE /personas/[id]", async function (_req: Request, { params }: Params) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -56,4 +57,4 @@ export async function DELETE(_req: Request, { params }: Params) {
   personasRepo.delete(id);
   await deleteIfExists(path.join(PERSONAS_DIR, id));
   return NextResponse.json({ ok: true });
-}
+});

@@ -7,17 +7,18 @@ import { personasRepo } from "@/lib/db";
 import { PERSONAS_DIR } from "@/lib/files";
 import { createPersonaSchema } from "@/lib/schema";
 import { requireSession } from "@/lib/auth/guard";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export const GET = logged("personas", "GET /personas", async function () {
   const denied = await requireSession();
   if (denied) return denied;
 
   return NextResponse.json({ personas: personasRepo.list() });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = logged("personas", "POST /personas", async function (req: Request) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -46,4 +47,4 @@ export async function POST(req: Request) {
   });
 
   return NextResponse.json({ persona }, { status: 201 });
-}
+});

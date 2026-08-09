@@ -10,6 +10,7 @@ import {
   extFromMime,
 } from "@/lib/files";
 import { requireSession } from "@/lib/auth/guard";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
  * POST /api/competitors/upload — multipart/form-data com campo `file`
  * Salva em data/competitors/upload_{nanoid}.{ext} e retorna o relpath.
  */
-export async function POST(req: Request) {
+export const POST = logged("competitors", "POST /competitors/upload", async function (req: Request) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -43,4 +44,4 @@ export async function POST(req: Request) {
   await writeBuffer(abs, buf);
 
   return NextResponse.json({ thumbRelPath: toRelative(abs) });
-}
+});

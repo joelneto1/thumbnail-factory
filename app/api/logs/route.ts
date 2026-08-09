@@ -3,13 +3,14 @@ import { NextResponse } from "next/server";
 import { logsRepo, type LogLevel } from "@/lib/db";
 import { requireSession } from "@/lib/auth/guard";
 import { logger } from "@/lib/logger";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 
 const LEVELS = new Set<LogLevel>(["info", "warn", "error"]);
 const MAX_LIMIT = 200;
 
-export async function GET(req: Request) {
+export const GET = logged("logs", "GET /logs", async function (req: Request) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -48,9 +49,9 @@ export async function GET(req: Request) {
     },
     { headers: { "Cache-Control": "no-store" } }
   );
-}
+});
 
-export async function DELETE() {
+export const DELETE = logged("logs", "DELETE /logs", async function () {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -61,4 +62,4 @@ export async function DELETE() {
   logger.warn("logs", `Trilha de logs limpa (${total} entradas apagadas)`);
 
   return NextResponse.json({ ok: true, deleted: total });
-}
+});

@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { fetchCompetitorFromUrl } from "@/lib/youtube";
 import { requireSession } from "@/lib/auth/guard";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
+export const GET = logged("youtube", "GET /youtube", async function (req: Request) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -22,4 +23,4 @@ export async function GET(req: Request) {
       { status: 400 }
     );
   }
-}
+});

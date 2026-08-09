@@ -4,15 +4,16 @@ import { z } from "zod";
 import { getSettingsStatus, setSetting, SETTING_KEYS } from "@/lib/settings";
 import { requireSession } from "@/lib/auth/guard";
 import { logger } from "@/lib/logger";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export const GET = logged("settings", "GET /settings", async function () {
   const denied = await requireSession();
   if (denied) return denied;
 
   return NextResponse.json({ settings: getSettingsStatus() });
-}
+});
 
 const updateSchema = z.object({
   glabsBaseUrl: z.string().optional(),
@@ -23,7 +24,7 @@ const updateSchema = z.object({
   cliProxyReasoningEffort: z.string().optional(),
 });
 
-export async function POST(req: Request) {
+export const POST = logged("settings", "POST /settings", async function (req: Request) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -69,4 +70,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ settings: getSettingsStatus() });
-}
+});

@@ -12,10 +12,11 @@ import {
 } from "@/lib/engines/orchestrator";
 import { requireSession } from "@/lib/auth/guard";
 import { logger } from "@/lib/logger";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: Request) {
+export const POST = logged("generate", "POST /generate", async function (req: Request) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -201,4 +202,4 @@ export async function POST(req: Request) {
     warnings.length ? { generationId: id, warnings } : { generationId: id },
     { status: 202 }
   );
-}
+});

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { suggestPrompt } from "@/lib/engines/claude-text";
 import { requireSession } from "@/lib/auth/guard";
+import { logged } from "@/lib/route-logger";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -13,7 +14,7 @@ const schema = z.object({
   language: z.enum(["pt-BR", "en"]).optional(),
 });
 
-export async function POST(req: Request) {
+export const POST = logged("prompt-suggest", "POST /prompt-suggest", async function (req: Request) {
   const denied = await requireSession();
   if (denied) return denied;
 
@@ -39,4 +40,4 @@ export async function POST(req: Request) {
       { status: 502 }
     );
   }
-}
+});
