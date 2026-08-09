@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getSettingsStatus, setSetting, SETTING_KEYS } from "@/lib/settings";
 import { requireSession } from "@/lib/auth/guard";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,16 @@ export async function POST(req: Request) {
       SETTING_KEYS.CLI_PROXY_REASONING_EFFORT,
       parsed.data.cliProxyReasoningEffort.trim()
     );
+  }
+
+  // Registra QUAIS chaves mudaram, nunca os valores — duas delas são segredo.
+  const alteradas = Object.keys(parsed.data).filter(
+    (k) => parsed.data[k as keyof typeof parsed.data] !== undefined
+  );
+  if (alteradas.length) {
+    logger.info("settings", `Settings alteradas: ${alteradas.join(", ")}`, {
+      detail: { chaves: alteradas },
+    });
   }
 
   return NextResponse.json({ settings: getSettingsStatus() });

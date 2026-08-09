@@ -13,6 +13,7 @@ const links = [
   { href: "/", label: "Workbench", pip: undefined as string | undefined },
   { href: "/personas", label: "Personas", pip: undefined as string | undefined },
   { href: "/history", label: "Histórico", pip: undefined as string | undefined },
+  { href: "/logs", label: "Logs", pip: undefined as string | undefined },
   { href: "/settings", label: "Settings", pip: undefined as string | undefined },
 ];
 

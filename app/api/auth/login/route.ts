@@ -14,6 +14,7 @@ import {
   clientKey,
   recordFailure,
 } from "@/lib/auth/rate-limit";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,9 @@ export async function POST(req: Request) {
   const key = clientKey(req);
   const limit = checkRateLimit(key);
   if (!limit.allowed) {
+    logger.warn("auth", `Login bloqueado por excesso de tentativas (${key})`, {
+      detail: { ip: key, liberaEmSegundos: limit.retryAfter },
+    });
     return NextResponse.json(
       {
         error: `Muitas tentativas. Tente novamente em ${Math.ceil(
@@ -74,6 +78,10 @@ export async function POST(req: Request) {
 
   if (!userOk || !passOk) {
     recordFailure(key);
+    // Não registra a senha tentada — nem no log local. Só o que falhou.
+    logger.warn("auth", `Login recusado (${key})`, {
+      detail: { ip: key, usuarioInformado: body.username, campo: userOk ? "senha" : "usuário" },
+    });
     return NextResponse.json(
       { error: "Usuário ou senha incorretos." },
       { status: 401, headers: { "Cache-Control": "no-store" } }
@@ -81,6 +89,9 @@ export async function POST(req: Request) {
   }
 
   clearAttempts(key);
+  logger.info("auth", `Login efetuado (${body.username})`, {
+    detail: { ip: key },
+  });
 
   const token = await createSessionToken(body.username);
   const response = NextResponse.json(

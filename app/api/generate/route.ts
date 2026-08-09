@@ -11,6 +11,7 @@ import {
   type ReferenceSet,
 } from "@/lib/engines/orchestrator";
 import { requireSession } from "@/lib/auth/guard";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -170,6 +171,23 @@ export async function POST(req: Request) {
   });
 
   if (persona) personasRepo.touchLastUsed(persona.id);
+
+  logger.info("generation", `Geração iniciada (${data.engine})`, {
+    generationId: id,
+    engine: data.engine,
+    detail: {
+      modo: data.mode,
+      variantes: data.variantCount,
+      persona: persona?.name ?? null,
+      competitor: competitorPath ?? null,
+      referencias: referenceImages.length,
+      stylesDescartados: droppedStyles,
+      promptChars: promptFinal.length,
+    },
+  });
+  for (const w of warnings) {
+    logger.warn("generation", w, { generationId: id, engine: data.engine });
+  }
 
   void startGeneration({
     generationId: id,

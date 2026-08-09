@@ -31,6 +31,7 @@ import {
   toRelative,
 } from "../files";
 import * as glabs from "./glabs";
+import { logger, explainEngineError } from "../logger";
 import type { EngineId, GenerationVariant } from "../types";
 
 interface DispatchContext {
@@ -91,12 +92,23 @@ async function dispatchVariant(
             model: "nano_banana_pro",
           });
     variantsRepo.setTaskId(variantId, taskId, engine);
+    logger.info("engine", `Task submetida (${engine})`, {
+      variantId,
+      engine,
+      taskId,
+      generationId: variantsRepo.get(variantId)?.generationId ?? null,
+      detail: { referencias: referenceImages.length },
+    });
   } catch (err) {
     const variant = variantsRepo.get(variantId);
-    variantsRepo.setFailed(
+    const msg = err instanceof Error ? err.message : String(err);
+    variantsRepo.setFailed(variantId, msg);
+    logger.error("engine", `Falha ao submeter task (${engine}): ${msg}`, {
       variantId,
-      err instanceof Error ? err.message : String(err)
-    );
+      engine,
+      generationId: variant?.generationId ?? null,
+      detail: err,
+    });
     if (variant) recomputeGenerationStatus(variant.generationId);
   }
 }
@@ -150,34 +162,65 @@ async function pollOne(v: GenerationVariant): Promise<void> {
       );
       await writeBuffer(outAbs, buffer);
       variantsRepo.setCompleted(v.id, toRelative(outAbs));
+      logger.info("engine", `Variante concluída (${v.engineUsed})`, {
+        variantId: v.id,
+        generationId: v.generationId,
+        engine: v.engineUsed,
+        taskId: v.taskId,
+      });
     } else if (status.status === "failed") {
       const rawDetail =
         status.error_detail ??
         status.error ??
         `error_code=${status.error_code ?? "?"}`;
 
-      // As duas engines repassam só "No images generated" quando o provedor
-      // bloqueia por política de conteúdo, sem dizer o motivo. Detectamos esse
-      // padrão e acrescentamos o contexto de quem bloqueou.
+      // O error_code é evidência muito melhor que o texto da mensagem — foi
+      // ele que identificou a falha do GPT Image 2 (code 0 = ambiente), num
+      // caso em que a mensagem apontava para prompt e imagens.
+      const byCode = explainEngineError(status.error_code, v.engineUsed);
+
+      // Sem code útil, cai no padrão de texto: as duas engines repassam só
+      // "No images generated" quando o provedor bloqueia por conteúdo.
       const looksGeneric =
         /no images? generated|empty result|no result|failed to generate|nothing returned/i.test(
           rawDetail
         );
-      const culprit =
-        v.engineUsed === "gpt-image-2"
-          ? "provável violação de política de conteúdo da OpenAI (o prompt ou a imagem do concorrente foi vetado). Tente outro competitor, reformule, ou gere pelo G-Labs."
-          : "provável violação de política de conteúdo no labs.google (a imagem do concorrente ou o prompt foi vetado pela Google). Tente outro competitor ou reformule.";
-      const detail = looksGeneric ? `${rawDetail} — ${culprit}` : rawDetail;
+      const byText = looksGeneric
+        ? v.engineUsed === "gpt-image-2"
+          ? "provável violação de política de conteúdo da OpenAI. Tente outro competitor, reformule, ou gere pelo G-Labs."
+          : "provável violação de política de conteúdo no labs.google. Tente outro competitor ou reformule."
+        : null;
+
+      const hint = byCode ?? byText;
+      const detail = hint ? `${rawDetail} — ${hint}` : rawDetail;
 
       variantsRepo.setFailed(v.id, detail);
+      logger.error("engine", `Variante falhou (${v.engineUsed}): ${rawDetail}`, {
+        variantId: v.id,
+        generationId: v.generationId,
+        engine: v.engineUsed,
+        taskId: v.taskId,
+        errorCode: status.error_code ?? null,
+        detail: {
+          error_code: status.error_code ?? null,
+          error: status.error ?? null,
+          error_detail: status.error_detail ?? null,
+          interpretacao: hint,
+        },
+      });
     }
     // pending/running → mantém
   } catch (err) {
     // Erro de rede no polling (G-Labs caiu) → falha a variante.
-    variantsRepo.setFailed(
-      v.id,
-      err instanceof Error ? err.message : String(err)
-    );
+    const msg = err instanceof Error ? err.message : String(err);
+    variantsRepo.setFailed(v.id, msg);
+    logger.error("engine", `Polling falhou (${v.engineUsed}): ${msg}`, {
+      variantId: v.id,
+      generationId: v.generationId,
+      engine: v.engineUsed,
+      taskId: v.taskId,
+      detail: err,
+    });
   }
 }
 

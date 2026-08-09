@@ -81,6 +81,26 @@ export function getDb(): Database.Database {
       value TEXT NOT NULL,
       updated_at INTEGER NOT NULL
     );
+
+    -- Trilha de eventos do app. Não tem FK para generations de propósito:
+    -- apagar uma geração não pode apagar o log de que ela existiu e falhou.
+    CREATE TABLE IF NOT EXISTS logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts INTEGER NOT NULL,
+      level TEXT NOT NULL,
+      scope TEXT NOT NULL,
+      message TEXT NOT NULL,
+      detail TEXT,
+      generation_id TEXT,
+      variant_id TEXT,
+      engine TEXT,
+      task_id TEXT,
+      error_code INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts DESC);
+    CREATE INDEX IF NOT EXISTS idx_logs_level_ts ON logs(level, ts DESC);
+    CREATE INDEX IF NOT EXISTS idx_logs_gen ON logs(generation_id);
   `);
 
   // Migrações idempotentes — adicionam colunas se ainda não existem.
@@ -550,6 +570,165 @@ export const settingsRepo = {
 
   delete(key: string): void {
     getDb().prepare("DELETE FROM settings WHERE key = ?").run(key);
+  },
+};
+
+// ─── Logs ─────────────────────────────────────────────────────────────
+
+export type LogLevel = "info" | "warn" | "error";
+
+export interface LogEntry {
+  id: number;
+  ts: number;
+  level: LogLevel;
+  scope: string;
+  message: string;
+  detail: string | null;
+  generationId: string | null;
+  variantId: string | null;
+  engine: string | null;
+  taskId: string | null;
+  errorCode: number | null;
+}
+
+interface LogRow {
+  id: number;
+  ts: number;
+  level: string;
+  scope: string;
+  message: string;
+  detail: string | null;
+  generation_id: string | null;
+  variant_id: string | null;
+  engine: string | null;
+  task_id: string | null;
+  error_code: number | null;
+}
+
+function mapLog(r: LogRow): LogEntry {
+  return {
+    id: r.id,
+    ts: r.ts,
+    level: r.level as LogLevel,
+    scope: r.scope,
+    message: r.message,
+    detail: r.detail,
+    generationId: r.generation_id,
+    variantId: r.variant_id,
+    engine: r.engine,
+    taskId: r.task_id,
+    errorCode: r.error_code,
+  };
+}
+
+/**
+ * Teto de linhas. O volume do Coolify é compartilhado com as imagens
+ * geradas, então a trilha não pode crescer sem limite.
+ */
+const LOG_MAX_ROWS = 5000;
+
+export const logsRepo = {
+  insert(entry: {
+    level: LogLevel;
+    scope: string;
+    message: string;
+    detail?: string | null;
+    generationId?: string | null;
+    variantId?: string | null;
+    engine?: string | null;
+    taskId?: string | null;
+    errorCode?: number | null;
+  }): void {
+    getDb()
+      .prepare(
+        `INSERT INTO logs (ts, level, scope, message, detail, generation_id, variant_id, engine, task_id, error_code)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        Date.now(),
+        entry.level,
+        entry.scope,
+        entry.message,
+        entry.detail ?? null,
+        entry.generationId ?? null,
+        entry.variantId ?? null,
+        entry.engine ?? null,
+        entry.taskId ?? null,
+        entry.errorCode ?? null
+      );
+  },
+
+  /** Descarta as linhas mais antigas acima do teto. */
+  prune(): number {
+    const info = getDb()
+      .prepare(
+        `DELETE FROM logs WHERE id NOT IN (
+           SELECT id FROM logs ORDER BY id DESC LIMIT ?
+         )`
+      )
+      .run(LOG_MAX_ROWS);
+    return info.changes;
+  },
+
+  list(opts: {
+    level?: LogLevel;
+    scope?: string;
+    generationId?: string;
+    search?: string;
+    limit: number;
+    before?: number;
+  }): LogEntry[] {
+    const where: string[] = [];
+    const args: unknown[] = [];
+
+    if (opts.level) {
+      where.push("level = ?");
+      args.push(opts.level);
+    }
+    if (opts.scope) {
+      where.push("scope = ?");
+      args.push(opts.scope);
+    }
+    if (opts.generationId) {
+      where.push("generation_id = ?");
+      args.push(opts.generationId);
+    }
+    if (opts.search) {
+      where.push("(message LIKE ? OR detail LIKE ?)");
+      args.push(`%${opts.search}%`, `%${opts.search}%`);
+    }
+    if (opts.before) {
+      where.push("id < ?");
+      args.push(opts.before);
+    }
+
+    const sql =
+      "SELECT * FROM logs" +
+      (where.length ? ` WHERE ${where.join(" AND ")}` : "") +
+      " ORDER BY id DESC LIMIT ?";
+    args.push(opts.limit);
+
+    return (getDb().prepare(sql).all(...args) as LogRow[]).map(mapLog);
+  },
+
+  counts(): { total: number; errors: number; warns: number } {
+    const row = getDb()
+      .prepare(
+        `SELECT COUNT(*) AS total,
+                SUM(CASE WHEN level='error' THEN 1 ELSE 0 END) AS errors,
+                SUM(CASE WHEN level='warn'  THEN 1 ELSE 0 END) AS warns
+         FROM logs`
+      )
+      .get() as { total: number; errors: number | null; warns: number | null };
+    return {
+      total: row.total,
+      errors: row.errors ?? 0,
+      warns: row.warns ?? 0,
+    };
+  },
+
+  clear(): void {
+    getDb().prepare("DELETE FROM logs").run();
   },
 };
 
