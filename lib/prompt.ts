@@ -96,7 +96,7 @@ export function buildRemodelPrompt(p: RemodelParams): string {
     // diferente resolve o bloqueio E é o comportamento correto.
     lines.push("");
     lines.push(
-      "PEOPLE — THIS RULE OVERRIDES EVERYTHING BELOW: do NOT reproduce, copy or resemble any person appearing in the anchor reference. Invent a completely different, generic, non-identifiable person for that spot — free to differ in gender, age, ethnicity, hair and build. Nothing about their appearance needs to match the reference; only the pose, framing, scale and lighting are borrowed, so the composition still reads. The anchor is a layout reference, never a likeness reference. If any item in the lists below names a person, this rule wins: their described appearance is NOT a constraint."
+      "PEOPLE — THIS RULE OVERRIDES EVERYTHING BELOW: do NOT reproduce, copy or resemble the specific individual appearing in the anchor reference. Invent a DIFFERENT, generic, non-identifiable person for that spot — different face, different hair, different build, unmistakably not the same human being. Keep only the broad casting: same gender and a similar age bracket, plus the same pose, framing, scale and lighting, so the composition still reads. The anchor sets the ROLE to cast, never the likeness to copy. If any item in the lists below names a person, this rule wins: their described appearance is NOT a constraint on identity."
     );
   }
 
@@ -165,7 +165,7 @@ export function buildRemodelPrompt(p: RemodelParams): string {
         keptObjSwaps.map((s) => s.original).join(", ") +
         (hasPersona
           ? ""
-          : ". This list describes SCENERY only. If any entry names a person, ignore its description entirely — keep just the fact that someone occupies that spot, and invent them freely per the PEOPLE rule, including a different gender if you like.")
+          : ". If any entry names a person, treat it as casting direction, not as a likeness: keep the gender and rough age it implies, and invent a different individual per the PEOPLE rule.")
     );
   }
 
