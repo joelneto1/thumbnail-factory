@@ -186,30 +186,34 @@ export async function getStatus(taskId: string): Promise<GlabsTaskStatus> {
 }
 
 /**
- * Reaponta a URL de um resultado para o host configurado, preservando só o
- * caminho.
+ * Constrói a URL de download a partir do que o G-Labs devolve em `results`.
  *
- * O G-Labs devolve `results` com URL ABSOLUTA do host dele — na prática
- * `http://127.0.0.1:8765/api/files/...`, porque é onde ele escuta. Usar isso
- * como veio só funciona na máquina que roda o G-Labs. No servidor,
- * `127.0.0.1` é o próprio container: a submissão passa (usa o base
- * configurado), o G-Labs gera, e o download morre com "fetch failed".
+ * O formato NÃO é uniforme entre os canais:
+ *   - /api/image/generate  → "http://127.0.0.1:8765/api/files/nome.jpg"
+ *   - /api/openai/generate → "C:\\Users\\...\\webhook_output\\image\\nome.png"
  *
- * Por isso o host do resultado nunca é confiável: vale o caminho.
+ * O segundo é um caminho de arquivo do host, não uma URL. Tratar os dois pelo
+ * caminho quebrava: o do Windows era concatenado à base, virando
+ * "https://host/C:\Users\..." e devolvendo 404.
+ *
+ * A única parte confiável é o NOME DO ARQUIVO, e `/api/files/{nome}` aceita
+ * exatamente isso — verificado contra o G-Labs. Então extraímos o nome e
+ * montamos a URL nós mesmos, o que também resolve o host: nada do que o
+ * G-Labs informa sobre onde ele mora serve quando o app roda noutra máquina.
  */
 function resolveResultUrl(raw: string): string {
-  const base = baseUrl();
   if (!raw) throw new GlabsError("Resultado sem URL");
+  const base = baseUrl();
 
-  if (!/^https?:\/\//i.test(raw)) {
-    return `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
+  // Descarta query e fragmento antes de isolar o nome.
+  const semQuery = raw.split(/[?#]/)[0];
+  // Funciona para URL, caminho POSIX e caminho Windows.
+  const nome = semQuery.split(/[/\\]/).filter(Boolean).pop();
+
+  if (!nome) {
+    throw new GlabsError(`Não foi possível extrair o arquivo de "${raw}"`);
   }
-  try {
-    const parsed = new URL(raw);
-    return `${base}${parsed.pathname}${parsed.search}`;
-  } catch {
-    return `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
-  }
+  return `${base}/api/files/${encodeURIComponent(nome)}`;
 }
 
 /**
