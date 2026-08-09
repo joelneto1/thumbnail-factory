@@ -33,6 +33,7 @@ interface LogEntry {
   engine: string | null;
   taskId: string | null;
   errorCode: number | null;
+  actor: string | null;
 }
 
 interface LogsResponse {
@@ -64,6 +65,7 @@ function LogRow({ entry }: { entry: LogEntry }) {
   const Icon = style.icon;
   const expandable = !!entry.detail;
 
+  const viaApi = entry.actor?.startsWith("API:") ?? false;
   const chips = [
     entry.engine,
     entry.errorCode !== null ? `code ${entry.errorCode}` : null,
@@ -98,6 +100,19 @@ function LogRow({ entry }: { entry: LogEntry }) {
 
         <span className="mt-[1px] w-[80px] shrink-0 font-mono text-[10px] uppercase tracking-wider text-[var(--ink-4)]">
           {entry.scope}
+        </span>
+
+        {/* Origem: distingue o que veio de fora do que veio da própria tela. */}
+        <span
+          className={cn(
+            "mt-[1px] w-[128px] shrink-0 truncate font-mono text-[10px]",
+            viaApi
+              ? "font-semibold text-[var(--accent)]"
+              : "text-[var(--ink-5)]"
+          )}
+          title={entry.actor ?? "origem não registrada"}
+        >
+          {entry.actor ?? "—"}
         </span>
 
         <span className="min-w-0 flex-1">
@@ -176,7 +191,11 @@ export default function LogsPage() {
     onError: (e) => toast.error((e as Error).message),
   });
 
-  const entries = data?.entries ?? [];
+  // A consulta traz as mais RECENTES (a rota ordena por id desc), e aqui a
+  // ordem é invertida para exibir: mais antigas em cima, mais novas embaixo —
+  // que é como se lê um terminal. Inverter na consulta traria as mais antigas
+  // do banco inteiro, que não é o que se quer ver.
+  const entries = [...(data?.entries ?? [])].reverse();
   const counts = data?.counts;
 
   const filters: Array<{ value: LogLevel | "all"; label: string; count?: number }> = [
@@ -273,12 +292,11 @@ export default function LogsPage() {
         )}
       </div>
 
-      {data?.nextCursor && (
-        <p className="mt-3 text-center font-mono text-[11px] text-[var(--ink-4)]">
-          mostrando as {entries.length} mais recentes — refine o filtro para ver
-          entradas mais antigas
-        </p>
-      )}
+      <p className="mt-3 text-center font-mono text-[11px] text-[var(--ink-4)]">
+        {data?.nextCursor
+          ? `mostrando as ${entries.length} mais recentes (antigas em cima, novas embaixo) — refine o filtro para ver mais`
+          : "antigas em cima, novas embaixo"}
+      </p>
 
       <ConfirmDialog
         open={confirmClear}

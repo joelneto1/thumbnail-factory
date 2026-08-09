@@ -95,7 +95,10 @@ export function getDb(): Database.Database {
       variant_id TEXT,
       engine TEXT,
       task_id TEXT,
-      error_code INTEGER
+      error_code INTEGER,
+      -- Quem originou: "sessão (joel)" ou "API: Hermes Agent". Sem isso não dá
+      -- para distinguir o que veio da tela do que veio de um sistema externo.
+      actor TEXT
     );
 
     CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts DESC);
@@ -128,6 +131,14 @@ export function getDb(): Database.Database {
 }
 
 function applyMigrations(db: Database.Database): void {
+  // logs.actor chegou depois: bancos criados antes não têm a coluna.
+  const logCols = db.prepare("PRAGMA table_info(logs)").all() as Array<{
+    name: string;
+  }>;
+  if (logCols.length > 0 && !logCols.some((c) => c.name === "actor")) {
+    db.exec("ALTER TABLE logs ADD COLUMN actor TEXT");
+  }
+
   // api_keys.key_cipher chegou depois: bancos criados antes não têm a coluna.
   const apiKeyCols = db.prepare("PRAGMA table_info(api_keys)").all() as Array<{
     name: string;
@@ -618,6 +629,8 @@ export interface LogEntry {
   engine: string | null;
   taskId: string | null;
   errorCode: number | null;
+  /** Quem originou: "sessão (joel)" ou "API: Hermes Agent". */
+  actor: string | null;
 }
 
 interface LogRow {
@@ -632,6 +645,7 @@ interface LogRow {
   engine: string | null;
   task_id: string | null;
   error_code: number | null;
+  actor: string | null;
 }
 
 function mapLog(r: LogRow): LogEntry {
@@ -647,6 +661,7 @@ function mapLog(r: LogRow): LogEntry {
     engine: r.engine,
     taskId: r.task_id,
     errorCode: r.error_code,
+    actor: r.actor,
   };
 }
 
@@ -667,11 +682,12 @@ export const logsRepo = {
     engine?: string | null;
     taskId?: string | null;
     errorCode?: number | null;
+    actor?: string | null;
   }): void {
     getDb()
       .prepare(
-        `INSERT INTO logs (ts, level, scope, message, detail, generation_id, variant_id, engine, task_id, error_code)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO logs (ts, level, scope, message, detail, generation_id, variant_id, engine, task_id, error_code, actor)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         Date.now(),
@@ -683,7 +699,8 @@ export const logsRepo = {
         entry.variantId ?? null,
         entry.engine ?? null,
         entry.taskId ?? null,
-        entry.errorCode ?? null
+        entry.errorCode ?? null,
+        entry.actor ?? null
       );
   },
 

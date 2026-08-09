@@ -1,4 +1,5 @@
 import { logsRepo, type LogLevel } from "./db";
+import { currentActor } from "./actor-context";
 
 /**
  * Trilha de eventos do app, gravada no SQLite e exibida em /logs.
@@ -68,6 +69,8 @@ function write(
       engine: meta.engine ?? null,
       taskId: meta.taskId ?? null,
       errorCode: meta.errorCode ?? null,
+      // Vem do contexto da requisição — nenhum chamador precisa informar.
+      actor: currentActor(),
     });
 
     sinceLastPrune += 1;
