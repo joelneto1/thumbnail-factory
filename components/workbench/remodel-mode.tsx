@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { toast } from "sonner";
 import {
   ChevronRight,
   Plus,
@@ -9,6 +10,8 @@ import {
   Trash2,
   Pencil,
   CheckCircle2,
+  Languages,
+  Loader2,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -16,6 +19,170 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { TextSwap, ObjectSwap, SwapAction } from "@/lib/types";
+
+/** Idiomas com atalho direto. Qualquer outro entra por "Outro". */
+const LANGUAGES: Array<{ label: string; value: string }> = [
+  { label: "PT-BR", value: "Brazilian Portuguese" },
+  { label: "Inglês", value: "English (US)" },
+  { label: "Espanhol", value: "Spanish" },
+  { label: "Italiano", value: "Italian" },
+  { label: "Francês", value: "French" },
+  { label: "Alemão", value: "German" },
+  { label: "Polonês", value: "Polish" },
+  { label: "Sueco", value: "Swedish" },
+];
+
+/**
+ * Barra de adaptação de idioma.
+ *
+ * Adapta apenas os textos em "Swap" — os marcados como Keep ficam fora de
+ * propósito, porque "manter" costuma ser nome de marca ou termo que o usuário
+ * quer preservar no original.
+ */
+function LanguageBar({
+  textSwaps,
+  onAdapted,
+}: {
+  textSwaps: TextSwap[];
+  onAdapted: (map: Map<string, string>) => void;
+}) {
+  const [pending, setPending] = React.useState<string | null>(null);
+  const [customOpen, setCustomOpen] = React.useState(false);
+  const [custom, setCustom] = React.useState("");
+
+  const adaptable = textSwaps.filter(
+    (s) => s.action === "replace" && s.original.trim()
+  );
+  const disabled = adaptable.length === 0 || pending !== null;
+
+  async function adapt(languageValue: string, languageLabel: string) {
+    if (adaptable.length === 0) return;
+    setPending(languageLabel);
+    try {
+      const res = await fetch("/api/adapt-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetLanguage: languageValue,
+          texts: adaptable.map((s) => ({
+            original: s.original,
+            position: s.position,
+            style: s.style,
+          })),
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as
+        | { adaptations?: Array<{ original: string; adapted: string }>; error?: string }
+        | null;
+
+      if (!res.ok || !data?.adaptations) {
+        // Falhou: os campos ficam como estavam. Nunca apagar o que o usuário
+        // já tinha por causa de um erro de rede ou do modelo.
+        throw new Error(data?.error ?? "Não foi possível adaptar os textos");
+      }
+
+      const map = new Map<string, string>();
+      for (const a of data.adaptations) {
+        if (a.adapted) map.set(a.original, a.adapted);
+      }
+      if (map.size === 0) throw new Error("O modelo não devolveu nenhum texto");
+
+      onAdapted(map);
+      toast.success(
+        `${map.size} texto${map.size > 1 ? "s" : ""} adaptado${
+          map.size > 1 ? "s" : ""
+        } para ${languageLabel}`
+      );
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setPending(null);
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border/60 bg-card/30 p-2.5">
+      <div className="flex items-center gap-2">
+        <Languages className="size-3.5 text-primary/70" />
+        <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          Adaptar textos para
+        </span>
+        {adaptable.length > 0 && (
+          <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+            {adaptable.length} em swap
+          </span>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {LANGUAGES.map((l) => (
+          <button
+            key={l.value}
+            onClick={() => adapt(l.value, l.label)}
+            disabled={disabled}
+            className={cn(
+              "flex items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors",
+              "border-border/60 bg-background/40 text-muted-foreground",
+              "hover:border-primary/50 hover:text-foreground",
+              "disabled:cursor-not-allowed disabled:opacity-40"
+            )}
+          >
+            {pending === l.label && <Loader2 className="size-3 animate-spin" />}
+            {l.label}
+          </button>
+        ))}
+
+        <button
+          onClick={() => setCustomOpen((v) => !v)}
+          disabled={disabled}
+          className={cn(
+            "rounded-md border border-dashed px-2.5 py-1 text-[11px] font-medium transition-colors",
+            "border-border/60 bg-background/40 text-muted-foreground",
+            "hover:border-primary/50 hover:text-foreground",
+            "disabled:cursor-not-allowed disabled:opacity-40"
+          )}
+        >
+          Outro…
+        </button>
+      </div>
+
+      {customOpen && (
+        <div className="flex gap-1.5">
+          <Input
+            value={custom}
+            onChange={(e) => setCustom(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && custom.trim()) {
+                e.preventDefault();
+                adapt(custom.trim(), custom.trim());
+              }
+            }}
+            placeholder="Ex: Japonês, Holandês, Turco…"
+            className="h-8 text-xs"
+          />
+          <Button
+            size="sm"
+            onClick={() => custom.trim() && adapt(custom.trim(), custom.trim())}
+            disabled={disabled || !custom.trim()}
+          >
+            {pending === custom.trim() ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              "Adaptar"
+            )}
+          </Button>
+        </div>
+      )}
+
+      {adaptable.length === 0 && (
+        <p className="text-[10px] leading-relaxed text-muted-foreground">
+          Nenhum texto em modo Swap para adaptar. Textos marcados como Keep são
+          preservados no idioma original.
+        </p>
+      )}
+    </div>
+  );
+}
 
 function ActionPicker({
   value,
@@ -122,6 +289,23 @@ export function RemodelMode({
             <Plus className="size-3.5" /> add
           </Button>
         </div>
+
+        {textSwaps.length > 0 && (
+          <LanguageBar
+            textSwaps={textSwaps}
+            onAdapted={(map) =>
+              onTextSwapsChange(
+                textSwaps.map((s) =>
+                  // Só o que está em Swap e recebeu adaptação muda. Clicar em
+                  // outro idioma sobrescreve — é o que permite trocar de ideia.
+                  s.action === "replace" && map.has(s.original)
+                    ? { ...s, replacement: map.get(s.original)! }
+                    : s
+                )
+              )
+            }
+          />
+        )}
 
         {textSwaps.length === 0 ? (
           <p className="rounded border border-dashed border-border/50 bg-card/30 px-3 py-3 text-center text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
