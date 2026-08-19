@@ -1,7 +1,12 @@
 import { z } from "zod";
 
 // "gemini" saiu — imagem hoje é só G-Labs (gpt-image-2 é placeholder futuro).
-export const engineSchema = z.enum(["glabs", "gpt-image-2"]);
+export const engineSchema = z.enum([
+  "auto",
+  "chatgpt-auto",
+  "gpt-image-2",
+  "glabs",
+]);
 export const modeSchema = z.enum(["from-scratch", "remodel"]);
 export const swapActionSchema = z.enum(["replace", "keep", "remove"]);
 

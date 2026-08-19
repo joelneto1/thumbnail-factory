@@ -7,6 +7,8 @@ import { settingsRepo } from "./db";
 export const SETTING_KEYS = {
   GLABS_BASE_URL: "glabs_base_url",
   GLABS_API_KEY: "glabs_api_key",
+  CHATGPT_AUTO_BASE_URL: "chatgpt_auto_base_url",
+  CHATGPT_AUTO_API_KEY: "chatgpt_auto_api_key",
   CLI_PROXY_BASE_URL: "cli_proxy_base_url",
   CLI_PROXY_API_KEY: "cli_proxy_api_key",
   CLI_PROXY_MODEL: "cli_proxy_model",
@@ -39,6 +41,28 @@ export function getGlabsBaseUrl(): string {
 
 export function getGlabsApiKey(): string {
   return readSetting(SETTING_KEYS.GLABS_API_KEY, "GLABS_API_KEY") ?? "";
+}
+
+// ─── ChatGPT Image Auto (2º provedor de GPT Image 2) ──────────────────
+
+const DEFAULT_CHATGPT_AUTO_BASE_URL = "http://100.98.183.1:3900";
+
+export function getChatgptAutoBaseUrl(): string {
+  return (
+    readSetting(SETTING_KEYS.CHATGPT_AUTO_BASE_URL, "CHATGPT_AUTO_BASE_URL") ??
+    DEFAULT_CHATGPT_AUTO_BASE_URL
+  );
+}
+
+export function getChatgptAutoApiKey(): string {
+  return (
+    readSetting(SETTING_KEYS.CHATGPT_AUTO_API_KEY, "CHATGPT_AUTO_API_KEY") ?? ""
+  );
+}
+
+/** Sem chave, o provedor é simplesmente pulado na cascata. */
+export function isChatgptAutoConfigured(): boolean {
+  return !!getChatgptAutoApiKey();
 }
 
 // ─── CLI Proxy (Claude Opus 4.8, OpenAI-compatible) ───────────────────

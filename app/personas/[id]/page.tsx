@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+
+import { resizeForUpload, descreverReducao } from "@/lib/resize-image";
 import { ArrowLeft, Trash2, ImagePlus, Loader2, X } from "lucide-react";
 
 import { usePersona } from "@/lib/hooks/use-personas";
@@ -67,8 +69,14 @@ export default function PersonaEditorPage() {
 
   const uploadFace = useMutation({
     mutationFn: async (file: File) => {
+      // Reduz antes de subir: foto de celular chega com 6-7 MB, o que é
+      // ordens de grandeza além do necessário para uma referência.
+      const r0 = await resizeForUpload(file);
+      if (r0.redimensionada) {
+        toast.info(`Imagem reduzida (${descreverReducao(r0)})`);
+      }
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", r0.file);
       const r = await fetch(`/api/personas/${id}/refs?kind=face`, {
         method: "POST",
         body: fd,
@@ -89,8 +97,14 @@ export default function PersonaEditorPage() {
 
   const uploadStyle = useMutation({
     mutationFn: async (file: File) => {
+      // Reduz antes de subir: foto de celular chega com 6-7 MB, o que é
+      // ordens de grandeza além do necessário para uma referência.
+      const r0 = await resizeForUpload(file);
+      if (r0.redimensionada) {
+        toast.info(`Imagem reduzida (${descreverReducao(r0)})`);
+      }
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", r0.file);
       const r = await fetch(`/api/personas/${id}/refs?kind=style`, {
         method: "POST",
         body: fd,

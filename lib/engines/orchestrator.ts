@@ -1,18 +1,19 @@
 /**
- * Orquestra a geração de variantes no G-Labs:
+ * Orquestra a geração de variantes:
  *   - dispara N tasks paralelas
  *   - mantém o DB atualizado (variant.task_id, status, output_path, error_detail)
  *   - garante que `recomputeGenerationStatus` seja chamado após cada update
  *
- * Duas engines de imagem, ambas atrás do G-Labs (mesmo host, mesma API key):
- *   - "glabs"       → POST /api/image/generate  (Nano Banana Pro)
- *   - "gpt-image-2" → POST /api/openai/generate (OpenAI GPT Image 2)
+ * Três provedores de imagem, nesta ordem de cascata:
+ *   1. "chatgpt-auto" → fila própria no PC dos perfis (N contas ChatGPT)
+ *   2. "gpt-image-2"  → GPT Image 2 pelo G-Labs
+ *   3. "glabs"        → Nano Banana Pro pelo G-Labs
  *
- * Não há fallback entre elas: se a engine escolhida falhar, a variante falha.
- * O Claude cobre texto/análise, mas NÃO gera imagem. (RunPod/FLUX.2 entra como
- * terceiro provider numa fase futura.)
+ * Com engine "auto", a variante que falha é REENVIADA ao próximo provedor.
+ * Escolher uma engine específica segue single-shot, para o usuário comparar
+ * provedores sem o app trocar por baixo.
  *
- * O polling é comum às duas — o G-Labs usa o mesmo /api/status/{task_id}.
+ * O Claude cobre texto/análise, mas NÃO gera imagem.
  */
 import path from "node:path";
 import { nanoid } from "nanoid";
@@ -31,6 +32,14 @@ import {
   toRelative,
 } from "../files";
 import * as glabs from "./glabs";
+import * as chatgptAuto from "./chatgpt-auto";
+import {
+  ENGINE_LABEL,
+  deveCascatear,
+  primeiroProvedor,
+  proximoProvedor,
+} from "./cascade";
+import { generationsRepo } from "../db";
 import { logger, explainEngineError } from "../logger";
 import type { EngineId, GenerationVariant } from "../types";
 
@@ -47,20 +56,23 @@ interface DispatchContext {
  * — fire-and-forget; o cliente faz polling de /api/status/{id}).
  */
 export async function startGeneration(ctx: DispatchContext): Promise<void> {
+  // "auto" não é provedor: resolve para o primeiro da cascata que esteja
+  // configurado. As variantes sempre nascem apontando para um provedor real.
+  const inicial = ctx.engine === "auto" ? primeiroProvedor() : ctx.engine;
   const variants: GenerationVariant[] = [];
   for (let i = 0; i < ctx.variantCount; i++) {
     const v = variantsRepo.create({
       id: nanoid(12),
       generationId: ctx.generationId,
       variantIndex: i,
-      engineUsed: ctx.engine,
+      engineUsed: inicial,
     });
     variants.push(v);
   }
 
   // Disparar em paralelo. Erros individuais não matam outras variantes.
   for (const v of variants) {
-    void dispatchVariant(v.id, ctx.prompt, ctx.referenceImages, ctx.engine).catch((err) => {
+    void dispatchVariant(v.id, ctx.prompt, ctx.referenceImages, inicial).catch((err) => {
       console.error(`[orchestrator] variant ${v.id} crashed:`, err);
       variantsRepo.setFailed(
         v.id,
@@ -71,6 +83,26 @@ export async function startGeneration(ctx: DispatchContext): Promise<void> {
   }
 }
 
+/** Submete a UM provedor. Devolve o id externo do trabalho. */
+async function submitTo(
+  engine: EngineId,
+  prompt: string,
+  referenceImages: string[]
+): Promise<string> {
+  if (engine === "chatgpt-auto") {
+    return chatgptAuto.submitJob({ prompt, referenceImages, aspectRatio: "16:9" });
+  }
+  if (engine === "gpt-image-2") {
+    return glabs.submitGptImage({ prompt, referenceImages, aspectRatio: "16:9" });
+  }
+  return glabs.submitImage({
+    prompt,
+    referenceImages,
+    aspectRatio: "16:9",
+    model: "nano_banana_pro",
+  });
+}
+
 async function dispatchVariant(
   variantId: string,
   prompt: string,
@@ -78,19 +110,7 @@ async function dispatchVariant(
   engine: EngineId
 ): Promise<void> {
   try {
-    const taskId =
-      engine === "gpt-image-2"
-        ? await glabs.submitGptImage({
-            prompt,
-            referenceImages,
-            aspectRatio: "16:9",
-          })
-        : await glabs.submitImage({
-            prompt,
-            referenceImages,
-            aspectRatio: "16:9",
-            model: "nano_banana_pro",
-          });
+    const taskId = await submitTo(engine, prompt, referenceImages);
     variantsRepo.setTaskId(variantId, taskId, engine);
     logger.info("engine", `Task submetida (${engine})`, {
       variantId,
@@ -102,19 +122,29 @@ async function dispatchVariant(
   } catch (err) {
     const variant = variantsRepo.get(variantId);
     const msg = err instanceof Error ? err.message : String(err);
-    variantsRepo.setFailed(variantId, msg);
     logger.error("engine", `Falha ao submeter task (${engine}): ${msg}`, {
       variantId,
       engine,
       generationId: variant?.generationId ?? null,
       detail: err,
     });
-    if (variant) recomputeGenerationStatus(variant.generationId);
+    // Falha de SUBMISSÃO (provedor fora do ar, chave errada) é justamente onde
+    // trocar de provedor mais vale — não pode encerrar a variante direto.
+    // A recursão termina sozinha: cada passo avança na cascata até não haver
+    // próximo, e aí `falharOuCascatear` marca como falha.
+    if (variant) {
+      await falharOuCascatear({ ...variant, engineUsed: engine }, msg, null);
+      recomputeGenerationStatus(variant.generationId);
+    }
   }
 }
 
 /** Engines que expõem task_id no /api/status do G-Labs. "gemini" é legado. */
-const POLLABLE: ReadonlySet<EngineId> = new Set<EngineId>(["glabs", "gpt-image-2"]);
+const POLLABLE: ReadonlySet<EngineId> = new Set<EngineId>([
+  "glabs",
+  "gpt-image-2",
+  "chatgpt-auto",
+]);
 
 /**
  * Polling server-side para variantes em pending/running.
@@ -145,82 +175,189 @@ export async function pollPendingVariants(generationId: string): Promise<void> {
 }
 
 async function pollOne(v: GenerationVariant): Promise<void> {
-  try {
-    const status = await glabs.getStatus(v.taskId!);
-    if (status.status === "completed") {
-      const result = status.results?.[0];
-      if (!result) {
-        variantsRepo.setFailed(v.id, "G-Labs reportou completed sem results");
-        return;
-      }
-      const { buffer, filename } = await glabs.downloadResult(result);
-      const ext = path.extname(filename) || ".png";
-      const outAbs = path.join(
-        OUTPUT_DIR,
-        v.generationId,
-        `variant_${v.variantIndex}${ext}`
-      );
-      await writeBuffer(outAbs, buffer);
-      variantsRepo.setCompleted(v.id, toRelative(outAbs));
-      logger.info("engine", `Variante concluída (${v.engineUsed})`, {
-        variantId: v.id,
-        generationId: v.generationId,
-        engine: v.engineUsed,
-        taskId: v.taskId,
-      });
-    } else if (status.status === "failed") {
-      const rawDetail =
-        status.error_detail ??
-        status.error ??
-        `error_code=${status.error_code ?? "?"}`;
+  if (v.engineUsed === "chatgpt-auto") return pollChatgptAuto(v);
+  return pollGlabs(v);
+}
 
-      // O error_code é evidência muito melhor que o texto da mensagem — foi
-      // ele que identificou a falha do GPT Image 2 (code 0 = ambiente), num
-      // caso em que a mensagem apontava para prompt e imagens.
-      const byCode = explainEngineError(status.error_code, v.engineUsed);
-
-      // Sem code útil, cai no padrão de texto: as duas engines repassam só
-      // "No images generated" quando o provedor bloqueia por conteúdo.
-      const looksGeneric =
-        /no images? generated|empty result|no result|failed to generate|nothing returned/i.test(
-          rawDetail
-        );
-      const byText = looksGeneric
-        ? v.engineUsed === "gpt-image-2"
-          ? "provável violação de política de conteúdo da OpenAI. Tente outro competitor, reformule, ou gere pelo G-Labs."
-          : "provável violação de política de conteúdo no labs.google. Tente outro competitor ou reformule."
-        : null;
-
-      const hint = byCode ?? byText;
-      const detail = hint ? `${rawDetail} — ${hint}` : rawDetail;
-
-      variantsRepo.setFailed(v.id, detail);
-      logger.error("engine", `Variante falhou (${v.engineUsed}): ${rawDetail}`, {
-        variantId: v.id,
-        generationId: v.generationId,
-        engine: v.engineUsed,
-        taskId: v.taskId,
-        errorCode: status.error_code ?? null,
-        detail: {
-          error_code: status.error_code ?? null,
-          error: status.error ?? null,
-          error_detail: status.error_detail ?? null,
-          interpretacao: hint,
-        },
-      });
-    }
-    // pending/running → mantém
-  } catch (err) {
-    // Erro de rede no polling (G-Labs caiu) → falha a variante.
-    const msg = err instanceof Error ? err.message : String(err);
-    variantsRepo.setFailed(v.id, msg);
-    logger.error("engine", `Polling falhou (${v.engineUsed}): ${msg}`, {
+/** Grava a imagem e marca a variante como concluída. */
+async function concluir(
+  v: GenerationVariant,
+  buffer: Buffer,
+  filename: string
+): Promise<void> {
+  const ext = path.extname(filename) || ".png";
+  const outAbs = path.join(
+    OUTPUT_DIR,
+    v.generationId,
+    `variant_${v.variantIndex}${ext}`
+  );
+  await writeBuffer(outAbs, buffer);
+  variantsRepo.setCompleted(v.id, toRelative(outAbs));
+  logger.info(
+    "engine",
+    `Variante concluída (${ENGINE_LABEL[v.engineUsed] ?? v.engineUsed})`,
+    {
       variantId: v.id,
       generationId: v.generationId,
       engine: v.engineUsed,
       taskId: v.taskId,
+    }
+  );
+}
+
+/**
+ * Falhou num provedor: tenta o próximo da cascata, ou encerra a variante.
+ *
+ * Só cascateia quando a geração foi pedida em modo "auto". Escolher uma engine
+ * específica continua single-shot, para o usuário conseguir comparar
+ * provedores sem que o app troque por baixo.
+ */
+async function falharOuCascatear(
+  v: GenerationVariant,
+  mensagem: string,
+  errorCode: number | null
+): Promise<void> {
+  const geracao = generationsRepo.get(v.generationId);
+  const emCascata = geracao?.engineRequested === "auto";
+
+  const proximo = proximoProvedor(v.engineUsed);
+
+  if (!emCascata || !proximo || !deveCascatear({ errorCode, mensagem })) {
+    variantsRepo.setFailed(v.id, mensagem);
+    logger.error(
+      "engine",
+      `Variante falhou (${ENGINE_LABEL[v.engineUsed] ?? v.engineUsed}): ${mensagem}`,
+      {
+        variantId: v.id,
+        generationId: v.generationId,
+        engine: v.engineUsed,
+        taskId: v.taskId,
+        errorCode,
+        detail: {
+          cascata: emCascata,
+          proximoProvedor: proximo ?? null,
+          motivoDeParar: !emCascata
+            ? "engine fixa, sem cascata"
+            : !proximo
+              ? "último provedor da cascata"
+              : "erro que se repetiria no próximo provedor",
+        },
+      }
+    );
+    return;
+  }
+
+  logger.warn(
+    "engine",
+    `${ENGINE_LABEL[v.engineUsed] ?? v.engineUsed} falhou — tentando ${
+      ENGINE_LABEL[proximo] ?? proximo
+    }`,
+    {
+      variantId: v.id,
+      generationId: v.generationId,
+      engine: v.engineUsed,
+      taskId: v.taskId,
+      errorCode,
+      detail: { motivo: mensagem, proximoProvedor: proximo },
+    }
+  );
+
+  // As referências não ficam guardadas — são reconstruídas do registro da
+  // geração, que é a fonte de verdade de persona e competitor.
+  try {
+    const set = await loadReferencesForGeneration(
+      geracao!.personaId,
+      geracao!.competitorPath
+    );
+    const { images } = selectReferences(set, proximo);
+    variantsRepo.setStatus(v.id, "pending");
+    await dispatchVariant(v.id, geracao!.promptFinal, images, proximo);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    variantsRepo.setFailed(
+      v.id,
+      `${mensagem} — e a troca para ${proximo} falhou: ${msg}`
+    );
+    logger.error("engine", `Cascata para ${proximo} falhou: ${msg}`, {
+      variantId: v.id,
+      generationId: v.generationId,
       detail: err,
     });
+  }
+}
+
+/** Polling do ChatGPT Auto: fila própria, status done/error. */
+async function pollChatgptAuto(v: GenerationVariant): Promise<void> {
+  try {
+    const job = await chatgptAuto.getJob(v.taskId!);
+    if (job.status === "pending" || job.status === "delivered") return;
+
+    if (job.status === "done") {
+      const { buffer, filename } = await chatgptAuto.downloadResult(job);
+      await concluir(v, buffer, filename);
+      return;
+    }
+
+    // Este provedor não usa código numérico: o motivo vem em texto livre.
+    await falharOuCascatear(
+      v,
+      job.error ?? "ChatGPT Auto falhou sem motivo",
+      null
+    );
+  } catch (err) {
+    await falharOuCascatear(
+      v,
+      err instanceof Error ? err.message : String(err),
+      null
+    );
+  }
+}
+
+/** Polling do G-Labs, comum aos canais Nano Banana e GPT Image 2. */
+async function pollGlabs(v: GenerationVariant): Promise<void> {
+  try {
+    const status = await glabs.getStatus(v.taskId!);
+    if (status.status === "pending" || status.status === "running") return;
+
+    if (status.status === "completed") {
+      const result = status.results?.[0];
+      if (!result) {
+        await falharOuCascatear(v, "G-Labs reportou completed sem results", null);
+        return;
+      }
+      const { buffer, filename } = await glabs.downloadResult(result);
+      await concluir(v, buffer, filename);
+      return;
+    }
+
+    const rawDetail =
+      status.error_detail ??
+      status.error ??
+      `error_code=${status.error_code ?? "?"}`;
+
+    // O error_code é evidência muito melhor que o texto da mensagem — foi ele
+    // que identificou a falha do GPT Image 2 (code 0 = ambiente), num caso em
+    // que a mensagem apontava para prompt e imagens.
+    const byCode = explainEngineError(status.error_code, v.engineUsed);
+    const looksGeneric =
+      /no images? generated|empty result|no result|failed to generate|nothing returned/i.test(
+        rawDetail
+      );
+    const hint =
+      byCode ??
+      (looksGeneric ? "provável violação de política de conteúdo do provedor." : null);
+
+    await falharOuCascatear(
+      v,
+      hint ? `${rawDetail} — ${hint}` : rawDetail,
+      status.error_code ?? null
+    );
+  } catch (err) {
+    await falharOuCascatear(
+      v,
+      err instanceof Error ? err.message : String(err),
+      null
+    );
   }
 }
 
@@ -262,6 +399,7 @@ export async function loadReferencesForGeneration(
 
 /** Teto de reference_images por endpoint do G-Labs. */
 const MAX_REFS: Record<string, number> = {
+  "chatgpt-auto": 8, // fila própria — teto declarado na doc dela
   "gpt-image-2": 5, // POST /api/openai/generate
   glabs: 10, // POST /api/image/generate
 };

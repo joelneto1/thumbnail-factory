@@ -3,6 +3,8 @@
 import * as React from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
+
+import { resizeForUpload } from "@/lib/resize-image";
 import { Link as LinkIcon, Upload, X, Loader2, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -57,8 +59,9 @@ export function CompetitorInput({
 
   const uploadFile = useMutation({
     mutationFn: async (file: File) => {
+      const r0 = await resizeForUpload(file);
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", r0.file);
       const r = await fetch("/api/competitors/upload", {
         method: "POST",
         body: fd,

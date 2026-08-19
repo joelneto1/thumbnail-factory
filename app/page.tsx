@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+
+import { resizeForUpload } from "@/lib/resize-image";
 import {
   Star,
   Download as DownloadIcon,
@@ -370,8 +372,9 @@ function WorkbenchPageInner() {
 
   // ─── Competitor handlers (for composer) ──────────────────────────
   const onUploadCompetitor = async (file: File) => {
+    const reduzida = await resizeForUpload(file);
     const fd = new FormData();
-    fd.append("file", file);
+    fd.append("file", reduzida.file);
     const r = await fetch("/api/competitors/upload", {
       method: "POST",
       body: fd,

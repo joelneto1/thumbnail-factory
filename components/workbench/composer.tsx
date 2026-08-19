@@ -151,6 +151,21 @@ export function Composer({
 
   const engineOptions: ChipOption<EngineId>[] = [
     {
+      // Cascata: ChatGPT Auto -> GPT Image 2 (G-Labs) -> Nano Banana Pro.
+      // Variante que falha é reenviada ao próximo provedor, sozinha.
+      value: "auto",
+      label: "Automático",
+      meta: "cascata: ChatGPT Auto → GPT Image 2 → Nano Banana",
+      avatar: <EngineMonogram id="auto" />,
+      badge: "recomendado",
+    },
+    {
+      value: "chatgpt-auto",
+      label: "ChatGPT Auto",
+      meta: "sua fila · N contas ChatGPT · máx. 8 refs",
+      avatar: <EngineMonogram id="chatgpt-auto" />,
+    },
+    {
       value: "glabs",
       label: "G-Labs · Nano Banana Pro",
       meta: `${health?.glabs === "up" ? "online" : "offline"} · Chrome/extensão ou túnel Tailscale`,
@@ -548,13 +563,23 @@ function EngineMonogram({ id }: { id: EngineId }) {
       className="grid size-[30px] shrink-0 place-items-center rounded-md font-bold text-[#050507]"
       style={{
         background:
-          id === "glabs"
-            ? "var(--grad-cta)"
-            : "linear-gradient(135deg, #6B7280, #1F2937)",
+          id === "auto"
+            ? "linear-gradient(135deg, #C6F24E, #FF3CA8)"
+            : id === "glabs"
+              ? "var(--grad-cta)"
+              : id === "chatgpt-auto"
+                ? "linear-gradient(135deg, #10A37F, #0B6B53)"
+                : "linear-gradient(135deg, #6B7280, #1F2937)",
         fontSize: 11,
       }}
     >
-      {id === "glabs" ? "GL" : "G2"}
+      {id === "auto"
+        ? "AU"
+        : id === "glabs"
+          ? "GL"
+          : id === "chatgpt-auto"
+            ? "CA"
+            : "G2"}
     </span>
   );
 }

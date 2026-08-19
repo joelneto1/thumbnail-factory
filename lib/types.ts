@@ -1,6 +1,13 @@
 // "gemini" permanece só como legado — gerações antigas no DB usaram essa engine.
 // Novas gerações não podem selecioná-la (ver engineSchema). Imagem hoje = "glabs".
-export type EngineId = "glabs" | "gemini" | "gpt-image-2";
+// "gemini" permanece só como legado (gerações antigas no DB).
+// "auto" não é provedor: é o modo cascata, resolvido no orquestrador.
+export type EngineId =
+  | "glabs"
+  | "gemini"
+  | "gpt-image-2"
+  | "chatgpt-auto"
+  | "auto";
 
 export type GenerationMode = "from-scratch" | "remodel";
 
