@@ -38,7 +38,13 @@ export async function analyzeImage(dataUrl: string): Promise<AnalysisResult> {
     images: [dataUrl],
     temperature: 0.2,
     reasoningEffort: "low",
-    maxTokens: 1500,
+    // Generoso de propósito. A regra de UMA ENTRADA POR LINHA multiplicou o
+    // tamanho da saída: uma thumb no estilo "história" passa de 12 entradas,
+    // cada uma com texto, posição, cor e estilo — e o raciocínio interno
+    // também consome deste orçamento. Com 1500 o JSON vinha cortado no meio,
+    // e o erro dizia "JSON inválido", mandando investigar formato quando o
+    // problema era tamanho.
+    maxTokens: 6000,
   });
 
   const jsonText = extractJson(raw);
@@ -46,8 +52,13 @@ export async function analyzeImage(dataUrl: string): Promise<AnalysisResult> {
   try {
     parsed = JSON.parse(jsonText) as AnalysisResult;
   } catch {
+    // Resposta cortada é o modo de falha comum aqui; "JSON inválido" sozinho
+    // manda procurar formato quando o problema é tamanho.
+    const truncado = !/[}\]]\s*$/.test(jsonText.trim());
     throw new ClaudeError(
-      `Claude retornou JSON inválido na análise: ${raw.slice(0, 200)}`
+      truncado
+        ? `A análise da thumbnail foi cortada antes de terminar (${jsonText.length} caracteres). A imagem tem texto demais para uma passada — tente de novo, ou use uma thumbnail com menos linhas.`
+        : `Claude retornou JSON inválido na análise: ${raw.slice(0, 200)}`
     );
   }
 
