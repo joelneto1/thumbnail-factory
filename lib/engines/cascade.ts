@@ -1,5 +1,6 @@
 import type { EngineId } from "../types";
 import { isChatgptAutoConfigured } from "../settings";
+import { engineDesativada } from "../engines-enabled";
 
 /**
  * Ordem da cascata e a regra de quando vale tentar o próximo provedor.
@@ -13,11 +14,8 @@ export const CASCADE_ORDER: EngineId[] = [
   "glabs", // 3º — Nano Banana Pro, filtro de conteúdo diferente
 ];
 
-export const ENGINE_LABEL: Record<string, string> = {
-  "chatgpt-auto": "ChatGPT Auto",
-  "gpt-image-2": "GPT Image 2 (G-Labs)",
-  glabs: "Nano Banana Pro",
-};
+// Mora no módulo leve porque o Workbench (componente de cliente) também usa.
+export { ENGINE_LABEL } from "../engines-enabled";
 
 /**
  * Decide se a falha justifica tentar o próximo provedor.
@@ -65,6 +63,8 @@ export function ordemAPartirDe(inicial: EngineId): EngineId[] {
  * tentativa de toda geração num erro previsível.
  */
 export function provedorDisponivel(engine: EngineId): boolean {
+  // Provedor desligado na chave geral nem é considerado.
+  if (engineDesativada(engine)) return false;
   if (engine === "chatgpt-auto") return isChatgptAutoConfigured();
   return true;
 }

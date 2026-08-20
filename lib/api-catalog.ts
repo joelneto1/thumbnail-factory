@@ -159,10 +159,10 @@ export const API_GROUPS: EndpointGroup[] = [
           },
           {
             name: "engine",
-            type: '"glabs" | "gpt-image-2"',
+            type: '"auto" | "glabs"',
             required: true,
             description:
-              "glabs = Nano Banana Pro (Google). gpt-image-2 = GPT Image 2 (OpenAI), que exige conta ChatGPT paga no G-Labs e aceita no máximo 5 referências.",
+              'auto = cascata automática. glabs = Nano Banana Pro (Google), hoje o único provedor ativo — auto e glabs dão no mesmo. "chatgpt-auto" e "gpt-image-2" estão desativados temporariamente e devolvem 400.',
           },
           {
             name: "variantCount",

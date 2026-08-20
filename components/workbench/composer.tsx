@@ -28,6 +28,11 @@ import {
 import { cn } from "@/lib/utils";
 import { fileUrl } from "@/lib/format";
 import { useHealth } from "@/components/shared/engine-status-dot";
+import {
+  engineDesativada,
+  ENGINE_LABEL,
+  CASCATA_LIGADA,
+} from "@/lib/engines-enabled";
 import { Chip, type ChipOption } from "./chip-picker";
 import { LanguageBar } from "./language-bar";
 import type {
@@ -149,13 +154,21 @@ export function Composer({
     })),
   ];
 
-  const engineOptions: ChipOption<EngineId>[] = [
+  // A cascata só lista os provedores ligados na chave geral, e o texto do
+  // "Automático" acompanha — prometer uma cascata de três com dois desligados
+  // faria o usuário culpar o app quando a única tentativa falhasse.
+  const cascataLigada = CASCATA_LIGADA.map((e) => ENGINE_LABEL[e] ?? e);
+
+  const todasEngines: ChipOption<EngineId>[] = [
     {
       // Cascata: ChatGPT Auto -> GPT Image 2 (G-Labs) -> Nano Banana Pro.
       // Variante que falha é reenviada ao próximo provedor, sozinha.
       value: "auto",
       label: "Automático",
-      meta: "cascata: ChatGPT Auto → GPT Image 2 → Nano Banana",
+      meta:
+        cascataLigada.length > 1
+          ? `cascata: ${cascataLigada.join(" → ")}`
+          : `${cascataLigada[0] ?? "Nano Banana Pro"} · único provedor ativo`,
       avatar: <EngineMonogram id="auto" />,
       badge: "recomendado",
     },
@@ -180,6 +193,10 @@ export function Composer({
       avatar: <EngineMonogram id="gpt-image-2" />,
     },
   ];
+
+  const engineOptions = todasEngines.filter(
+    (o) => o.value === "auto" || !engineDesativada(o.value)
+  );
 
   const variantOptions: ChipOption<number>[] = [1, 2, 3, 4].map((n) => ({
     value: n,

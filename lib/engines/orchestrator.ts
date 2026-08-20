@@ -9,6 +9,10 @@
  *   2. "gpt-image-2"  → GPT Image 2 pelo G-Labs
  *   3. "glabs"        → Nano Banana Pro pelo G-Labs
  *
+ * DE 20/08/2026 ATÉ SEGUNDA ORDEM só o (3) está ligado — ver a chave geral em
+ * `lib/engines-enabled.ts`. A cascata continua inteira no código: religar é
+ * esvaziar aquela lista.
+ *
  * Com engine "auto", a variante que falha é REENVIADA ao próximo provedor.
  * Escolher uma engine específica segue single-shot, para o usuário comparar
  * provedores sem o app trocar por baixo.
@@ -33,6 +37,7 @@ import {
 } from "../files";
 import * as glabs from "./glabs";
 import * as chatgptAuto from "./chatgpt-auto";
+import { engineDesativada } from "../engines-enabled";
 import {
   ENGINE_LABEL,
   deveCascatear,
@@ -59,7 +64,13 @@ interface DispatchContext {
 export async function startGeneration(ctx: DispatchContext): Promise<void> {
   // "auto" não é provedor: resolve para o primeiro da cascata que esteja
   // configurado. As variantes sempre nascem apontando para um provedor real.
-  const inicial = ctx.engine === "auto" ? primeiroProvedor() : ctx.engine;
+  // Engine desligada na chave geral cai no mesmo caminho — a rota já barra o
+  // pedido explícito, isto aqui só garante que nada nasça apontando para um
+  // provedor que ninguém vai consultar.
+  const inicial =
+    ctx.engine === "auto" || engineDesativada(ctx.engine)
+      ? primeiroProvedor()
+      : ctx.engine;
   const variants: GenerationVariant[] = [];
   for (let i = 0; i < ctx.variantCount; i++) {
     const v = variantsRepo.create({

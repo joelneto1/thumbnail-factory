@@ -46,6 +46,7 @@ import type {
   Persona,
   TextSwap,
 } from "@/lib/types";
+import { CASCATA_LIGADA } from "@/lib/engines-enabled";
 
 interface StatusResponse {
   generation: Generation;
@@ -85,7 +86,11 @@ function WorkbenchPageInner() {
     prompt: "",
     extra: "",
     variants: 4,
-    engine: "glabs",
+    // "auto" e não "glabs": com um provedor só os dois mandam para o mesmo
+    // Nano Banana, mas a reescrita do prompt após recusa de conteúdo só entra
+    // em modo cascata. Escolher "glabs" na mão continua single-shot, sem
+    // reescrita — é o que serve para comparar provedor puro.
+    engine: "auto",
     ratio: "16:9",
   });
   const set = React.useCallback(
@@ -361,7 +366,12 @@ function WorkbenchPageInner() {
       toast.error("Adicione pelo menos um swap pro modo remodelar");
       return;
     }
-    if (state.engine === "glabs" && health?.glabs === "down") {
+    // Em "auto" a primeira tentativa é do primeiro provedor ligado — só avisa
+    // do G-Labs offline quando é ele quem vai receber o pedido.
+    const vaiDeGlabs =
+      state.engine === "glabs" ||
+      (state.engine === "auto" && CASCATA_LIGADA[0] === "glabs");
+    if (vaiDeGlabs && health?.glabs === "down") {
       toast.error(
         "G-Labs offline — abre o Chrome com a extensão (ou configura o túnel Tailscale em /settings)"
       );

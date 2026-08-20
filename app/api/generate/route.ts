@@ -11,6 +11,8 @@ import {
   type ReferenceSet,
 } from "@/lib/engines/orchestrator";
 import { requireSession } from "@/lib/auth/guard";
+import { engineDesativada } from "@/lib/engines-enabled";
+import { ENGINE_LABEL } from "@/lib/engines/cascade";
 import { logger } from "@/lib/logger";
 import { logged } from "@/lib/route-logger";
 
@@ -29,6 +31,20 @@ export const POST = logged("generate", "POST /generate", async function (req: Re
     );
   }
   const data = parsed.data;
+
+  // Provedor desligado na chave geral: recusa explícita, não troca por baixo.
+  // Quem chamou pediu um provedor específico — devolver outra coisa calada
+  // esconderia justamente o que ele quis controlar.
+  if (engineDesativada(data.engine)) {
+    return NextResponse.json(
+      {
+        error: `${
+          ENGINE_LABEL[data.engine] ?? data.engine
+        } está desativado no momento. Use "auto" ou "glabs" (Nano Banana Pro).`,
+      },
+      { status: 400 }
+    );
+  }
 
   // Persona é opcional. Se vier, valida a existência e a face.
   const personaId = data.personaId?.trim() || null;
