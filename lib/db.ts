@@ -68,6 +68,17 @@ export function getDb(): Database.Database {
       output_path TEXT,
       status TEXT NOT NULL,
       error_detail TEXT,
+      -- Reescrita do prompt após TODOS os provedores recusarem por conteúdo.
+      -- A coluna rewrites é o trinco: uma só, senão vira laço caro num
+      -- prompt que o filtro nunca vai aceitar.
+      rewrites INTEGER NOT NULL DEFAULT 0,
+      prompt_override TEXT,
+      -- Trinco do poller. O cliente pinga o status a cada poucos centesimos de
+      -- segundo; sem isto, dois pings simultaneos veem a MESMA tarefa falhada
+      -- e cada um dispara sua propria cascata (ou sua propria reescrita, que
+      -- leva ~20s no Claude). Vira 1 quando alguem assume a falha, e volta a 0
+      -- quando ha tarefa nova para acompanhar.
+      poll_done INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
       completed_at INTEGER
     );
@@ -137,6 +148,27 @@ function applyMigrations(db: Database.Database): void {
   }>;
   if (logCols.length > 0 && !logCols.some((c) => c.name === "actor")) {
     db.exec("ALTER TABLE logs ADD COLUMN actor TEXT");
+  }
+
+  // generation_variants ganhou as colunas de reescrita depois.
+  const varCols = db.prepare("PRAGMA table_info(generation_variants)").all() as Array<{
+    name: string;
+  }>;
+  if (varCols.length > 0) {
+    const nomes = new Set(varCols.map((c) => c.name));
+    if (!nomes.has("rewrites")) {
+      db.exec(
+        "ALTER TABLE generation_variants ADD COLUMN rewrites INTEGER NOT NULL DEFAULT 0"
+      );
+    }
+    if (!nomes.has("prompt_override")) {
+      db.exec("ALTER TABLE generation_variants ADD COLUMN prompt_override TEXT");
+    }
+    if (!nomes.has("poll_done")) {
+      db.exec(
+        "ALTER TABLE generation_variants ADD COLUMN poll_done INTEGER NOT NULL DEFAULT 0"
+      );
+    }
   }
 
   // api_keys.key_cipher chegou depois: bancos criados antes não têm a coluna.
@@ -299,6 +331,9 @@ interface VariantRow {
   output_path: string | null;
   status: string;
   error_detail: string | null;
+  rewrites: number;
+  prompt_override: string | null;
+  poll_done: number;
   created_at: number;
   completed_at: number | null;
 }
@@ -313,6 +348,9 @@ function rowToVariant(row: VariantRow): GenerationVariant {
     outputPath: row.output_path,
     status: row.status as VariantStatus,
     errorDetail: row.error_detail,
+    rewrites: row.rewrites ?? 0,
+    promptOverride: row.prompt_override ?? null,
+    pollDone: (row.poll_done ?? 0) === 1,
     createdAt: row.created_at,
     completedAt: row.completed_at,
   };
@@ -543,9 +581,26 @@ export const variantsRepo = {
   setTaskId(id: string, taskId: string, engineUsed: EngineId): void {
     getDb()
       .prepare(
-        "UPDATE generation_variants SET task_id=?, engine_used=?, status='running' WHERE id=?"
+        "UPDATE generation_variants SET task_id=?, engine_used=?, status='running', poll_done=0 WHERE id=?"
       )
       .run(taskId, engineUsed, id);
+  },
+
+  /**
+   * Assume o desfecho de uma tarefa — devolve `true` a quem chegou primeiro.
+   *
+   * better-sqlite3 e sincrono, entao o UPDATE condicional e um test-and-set de
+   * verdade: dois pings concorrentes nao conseguem sair daqui os dois com
+   * `true`. Sem este trinco, cada ping que enxergasse a mesma falha abriria
+   * uma cascata (ou uma reescrita) propria, em paralelo, na mesma variante.
+   */
+  claimTerminal(id: string, taskId: string | null): boolean {
+    const r = getDb()
+      .prepare(
+        "UPDATE generation_variants SET poll_done=1 WHERE id=? AND poll_done=0 AND task_id IS ?"
+      )
+      .run(id, taskId);
+    return r.changes === 1;
   },
 
   setStatus(id: string, status: VariantStatus): void {
@@ -560,6 +615,15 @@ export const variantsRepo = {
         "UPDATE generation_variants SET status='completed', output_path=?, completed_at=? WHERE id=?"
       )
       .run(outputPath, Date.now(), id);
+  },
+
+  /** Guarda o prompt reescrito e tranca novas reescritas desta variante. */
+  setRewrite(id: string, prompt: string): void {
+    getDb()
+      .prepare(
+        "UPDATE generation_variants SET prompt_override=?, rewrites=rewrites+1 WHERE id=?"
+      )
+      .run(prompt, id);
   },
 
   setFailed(id: string, errorDetail: string): void {

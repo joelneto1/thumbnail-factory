@@ -109,6 +109,12 @@ export interface GenerationVariant {
   outputPath: string | null;
   status: VariantStatus;
   errorDetail: string | null;
+  /** Quantas vezes o prompt foi reescrito após recusa de conteúdo (máx. 1). */
+  rewrites: number;
+  /** Prompt reescrito em uso, quando houve reescrita. */
+  promptOverride: string | null;
+  /** Alguém já assumiu o desfecho da tarefa atual — o poller não repete. */
+  pollDone: boolean;
   createdAt: number;
   completedAt: number | null;
 }

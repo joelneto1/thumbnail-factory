@@ -40,6 +40,7 @@ import {
   proximoProvedor,
 } from "./cascade";
 import { generationsRepo } from "../db";
+import { rewriteBlockedPrompt, ehRecusaDeConteudo } from "./claude-rewrite";
 import { logger, explainEngineError } from "../logger";
 import type { EngineId, GenerationVariant } from "../types";
 
@@ -164,6 +165,10 @@ export async function pollPendingVariants(generationId: string): Promise<void> {
     if (v.status !== "pending" && v.status !== "running") continue;
     if (!POLLABLE.has(v.engineUsed)) continue;
     if (!v.taskId) continue;
+    // Alguém já está tratando o desfecho desta tarefa (trocando de provedor,
+    // ou esperando o Claude reescrever o prompt). Consultar de novo só renderia
+    // a mesma falha e uma segunda cascata em paralelo.
+    if (v.pollDone) continue;
 
     work.push(pollOne(v));
   }
@@ -222,6 +227,18 @@ async function falharOuCascatear(
 
   const proximo = proximoProvedor(v.engineUsed);
 
+  // Esgotou a cascata e a recusa foi de CONTEÚDO: o gatilho está no texto, não
+  // no provedor. Vale uma reescrita — uma só — e recomeçar do primeiro.
+  if (
+    emCascata &&
+    !proximo &&
+    v.rewrites === 0 &&
+    ehRecusaDeConteudo(mensagem, errorCode)
+  ) {
+    await reescreverERecomecar(v, mensagem, errorCode);
+    return;
+  }
+
   if (!emCascata || !proximo || !deveCascatear({ errorCode, mensagem })) {
     variantsRepo.setFailed(v.id, mensagem);
     logger.error(
@@ -239,8 +256,11 @@ async function falharOuCascatear(
           motivoDeParar: !emCascata
             ? "engine fixa, sem cascata"
             : !proximo
-              ? "último provedor da cascata"
+              ? v.rewrites > 0
+                ? "cascata esgotada mesmo após reescrever o prompt"
+                : "último provedor da cascata"
               : "erro que se repetiria no próximo provedor",
+          promptReescrito: v.rewrites > 0,
         },
       }
     );
@@ -271,7 +291,9 @@ async function falharOuCascatear(
     );
     const { images } = selectReferences(set, proximo);
     variantsRepo.setStatus(v.id, "pending");
-    await dispatchVariant(v.id, geracao!.promptFinal, images, proximo);
+    // Se esta variante já teve o prompt reescrito, é o reescrito que segue.
+    const promptEmUso = v.promptOverride ?? geracao!.promptFinal;
+    await dispatchVariant(v.id, promptEmUso, images, proximo);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     variantsRepo.setFailed(
@@ -286,11 +308,76 @@ async function falharOuCascatear(
   }
 }
 
+/**
+ * Reescreve o prompt e recomeça a cascata do primeiro provedor.
+ *
+ * Uma única vez por variante — `rewrites` é o trinco. Sem ele, um prompt que o
+ * filtro nunca vai aceitar viraria um laço de reescritas e rodadas completas
+ * de cascata, caro e sem fim.
+ */
+async function reescreverERecomecar(
+  v: GenerationVariant,
+  mensagem: string,
+  errorCode: number | null
+): Promise<void> {
+  const geracao = generationsRepo.get(v.generationId);
+  if (!geracao) {
+    variantsRepo.setFailed(v.id, mensagem);
+    return;
+  }
+
+  const promptAtual = v.promptOverride ?? geracao.promptFinal;
+
+  try {
+    const reescrito = await rewriteBlockedPrompt(promptAtual, mensagem);
+    variantsRepo.setRewrite(v.id, reescrito);
+
+    logger.warn(
+      "engine",
+      "Todos os provedores recusaram por conteúdo — prompt reescrito, recomeçando a cascata",
+      {
+        variantId: v.id,
+        generationId: v.generationId,
+        engine: v.engineUsed,
+        errorCode,
+        detail: {
+          recusa: mensagem,
+          promptAntes: promptAtual.slice(0, 700),
+          promptDepois: reescrito.slice(0, 700),
+        },
+      }
+    );
+
+    const inicial = primeiroProvedor();
+    const set = await loadReferencesForGeneration(
+      geracao.personaId,
+      geracao.competitorPath
+    );
+    const { images } = selectReferences(set, inicial);
+    variantsRepo.setStatus(v.id, "pending");
+    await dispatchVariant(v.id, reescrito, images, inicial);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    variantsRepo.setFailed(
+      v.id,
+      `${mensagem} — a reescrita do prompt também falhou: ${msg}`
+    );
+    logger.error("engine", `Reescrita do prompt falhou: ${msg}`, {
+      variantId: v.id,
+      generationId: v.generationId,
+      detail: err,
+    });
+  }
+}
+
 /** Polling do ChatGPT Auto: fila própria, status done/error. */
 async function pollChatgptAuto(v: GenerationVariant): Promise<void> {
   try {
     const job = await chatgptAuto.getJob(v.taskId!);
     if (job.status === "pending" || job.status === "delivered") return;
+
+    // Desfecho definido: quem chegar primeiro trata, os demais saem.
+    if (!variantsRepo.claimTerminal(v.id, v.taskId)) return;
 
     if (job.status === "done") {
       const { buffer, filename } = await chatgptAuto.downloadResult(job);
@@ -305,6 +392,7 @@ async function pollChatgptAuto(v: GenerationVariant): Promise<void> {
       null
     );
   } catch (err) {
+    if (!variantsRepo.claimTerminal(v.id, v.taskId)) return;
     await falharOuCascatear(
       v,
       err instanceof Error ? err.message : String(err),
@@ -318,6 +406,9 @@ async function pollGlabs(v: GenerationVariant): Promise<void> {
   try {
     const status = await glabs.getStatus(v.taskId!);
     if (status.status === "pending" || status.status === "running") return;
+
+    // Desfecho definido: quem chegar primeiro trata, os demais saem.
+    if (!variantsRepo.claimTerminal(v.id, v.taskId)) return;
 
     if (status.status === "completed") {
       const result = status.results?.[0];
@@ -353,6 +444,7 @@ async function pollGlabs(v: GenerationVariant): Promise<void> {
       status.error_code ?? null
     );
   } catch (err) {
+    if (!variantsRepo.claimTerminal(v.id, v.taskId)) return;
     await falharOuCascatear(
       v,
       err instanceof Error ? err.message : String(err),
